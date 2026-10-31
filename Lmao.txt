@@ -1,0 +1,3690 @@
+local Parasite = loadstring(game:HttpGet("https://pastefy.app/yz3LkFxu/raw"))()
+Parasite:LoadFont({ Name = "ValleySans" })
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+local CollectionService = game:GetService("CollectionService")
+local TweenService = game:GetService("TweenService")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+local _AC = require(game:GetService("ReplicatedFirst").Controllers.AnimationController)
+
+local MARK = string.char(math.random(97, 122), math.random(97, 122), math.random(97, 122)) .. tostring(math.random(100000, 999999))
+local MARK2 = string.char(math.random(97, 122), math.random(97, 122), math.random(97, 122)) .. tostring(math.random(100000, 999999))
+local function applyFlameBorder(target, thickness, speed)
+    local stroke = target
+    if not target:IsA("UIStroke") then
+        stroke = target:FindFirstChildOfClass("UIStroke") or Instance.new("UIStroke")
+        stroke.Parent = target
+    end
+    stroke.Thickness = thickness or 2
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    stroke.Color = Color3.new(1, 1, 1)
+    stroke.Transparency = 0
+
+    local g = Instance.new("UIGradient")
+    g.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0.00, Color3.fromRGB(255, 40, 40)),   -- đỏ
+        ColorSequenceKeypoint.new(0.35, Color3.fromRGB(255, 140, 30)),  -- cam
+        ColorSequenceKeypoint.new(0.50, Color3.fromRGB(255, 240, 225)), -- trắng nhạt
+        ColorSequenceKeypoint.new(0.65, Color3.fromRGB(255, 140, 30)),  -- cam
+        ColorSequenceKeypoint.new(1.00, Color3.fromRGB(255, 40, 40)),   -- đỏ
+    })
+    g.Parent = stroke
+
+    RunService.RenderStepped:Connect(function(dt)
+        g.Rotation = (g.Rotation + (speed or 120) * dt) % 360
+    end)
+end
+
+local BallService = ReplicatedStorage.Packages._Index["sleitnick_knit@1.7.0"].knit.Services.BallService
+local Serve = ReplicatedStorage.Packages._Index["sleitnick_knit@1.7.0"].knit.Services.GameService.RF.Serve
+local EffectsRemote = ReplicatedStorage.Packages._Index["sleitnick_knit@1.7.0"].knit.Services.BallService.RE.Effects
+local doMove = ReplicatedStorage.Packages._Index["sleitnick_knit@1.7.0"].knit.Services.BallService.RE.DoMove
+local StopAllEmotes = ReplicatedStorage.Packages._Index["sleitnick_knit@1.7.0"].knit.Services.AnimationService.RE.StopAllEmotes
+local GameEffectRemote = ReplicatedStorage.Packages._Index["sleitnick_knit@1.7.0"].knit.Services.GameService.RE.Effect
+
+local Hitbox = (function()
+    local Config = {
+        Enabled = true,
+        SizeMultiplier = 5,
+        Color = Color3.fromRGB(0, 0, 255),
+        Transparency = 0.3,
+        Material = Enum.Material.ForceField,
+        CanCollide = false,
+        CanQuery = true,
+        CanTouch = true,
+        CastShadow = true,
+    }
+
+    local M = {}
+
+    local originalSizes = {}
+    local updateConn = nil
+
+    local function getTargetModel()
+        for _, model in ipairs(Workspace:GetChildren()) do
+            if model:IsA("Model") and model.Name:match("^CLIENT_BALL_%d+$") then
+                return model
+            end
+        end
+        return nil
+    end
+
+    local function storeOriginal(model)
+        if originalSizes[model] then return end
+
+        originalSizes[model] = {}
+
+        for _, part in ipairs(model:GetDescendants()) do
+            if part:IsA("BasePart") then
+                originalSizes[model][part] = {
+                    Size = part.Size,
+                    Color = part.Color,
+                    Transparency = part.Transparency,
+                    Material = part.Material,
+                    CanCollide = part.CanCollide,
+                    CanQuery = part.CanQuery,
+                    CanTouch = part.CanTouch,
+                    CastShadow = part.CastShadow,
+                }
+            end
+        end
+    end
+
+    local function applyBigger(model)
+        if not model then return end
+
+        storeOriginal(model)
+
+        for _, part in ipairs(model:GetDescendants()) do
+            if part:IsA("BasePart") then
+                local original = originalSizes[model][part]
+                if original then
+                    part.Size = original.Size * Config.SizeMultiplier
+                    part.Color = Config.Color
+                    part.Transparency = Config.Transparency
+                    part.Material = Config.Material
+                    part.CanCollide = Config.CanCollide
+                    part.CanQuery = Config.CanQuery
+                    part.CanTouch = Config.CanTouch
+                    part.CastShadow = Config.CastShadow
+                end
+            end
+        end
+    end
+
+    local function restoreOriginal(model)
+        if not model or not originalSizes[model] then return end
+
+        for part, original in pairs(originalSizes[model]) do
+            if part and part.Parent then
+                part.Size = original.Size
+                part.Color = original.Color
+                part.Transparency = original.Transparency
+                part.Material = original.Material
+                part.CanCollide = original.CanCollide
+                part.CanQuery = original.CanQuery
+                part.CanTouch = original.CanTouch
+                part.CastShadow = original.CastShadow
+            end
+        end
+
+        originalSizes[model] = nil
+    end
+
+    local function update()
+        local model = getTargetModel()
+
+        if not model then return end
+
+        if not Config.Enabled then
+            restoreOriginal(model)
+            return
+        end
+
+        applyBigger(model)
+    end
+
+    function M.enable()
+        if updateConn then return end
+        updateConn = RunService.RenderStepped:Connect(update)
+    end
+
+    function M.disable()
+        if updateConn then
+            updateConn:Disconnect()
+            updateConn = nil
+        end
+
+        for model in pairs(originalSizes) do
+            restoreOriginal(model)
+        end
+
+        originalSizes = {}
+    end
+
+     function M.setSize(mult)
+        for model in pairs(originalSizes) do restoreOriginal(model) end
+        originalSizes = {}
+        Config.SizeMultiplier = mult
+    end
+
+    function M.setColor(color)
+        Config.Color = color
+    end
+
+    function M.setTransparency(transparency)
+        Config.Transparency = transparency
+    end
+
+    function M.setCanCollide(value)
+        Config.CanCollide = value
+    end
+
+    function M.setCanTouch(value)
+        Config.CanTouch = value
+    end
+
+    function M.setCastShadow(value)
+        Config.CastShadow = value
+    end
+
+    return M
+end)()
+
+local hitboxEnabled = false
+local hitboxScale = 5.0
+local hitboxColor = Color3.fromRGB(255, 80, 80)
+local hitboxTransparency = 0.3
+
+local function enableHitbox() hitboxEnabled = true Hitbox.enable() end
+local function disableHitbox() hitboxEnabled = false Hitbox.disable() end
+local function setHitboxScale(scale) hitboxScale = scale or 5 Hitbox.setSize(hitboxScale) end
+local function setHitboxColor(color) hitboxColor = color or Color3.fromRGB(255, 80, 80) Hitbox.setColor(hitboxColor) end
+local function setHitboxTransparency(t) hitboxTransparency = t or 0.3 Hitbox.setTransparency(hitboxTransparency) end
+
+local function getBallId()
+    for _, model in ipairs(Workspace:GetChildren()) do
+        if model:IsA("Model") and model.Name:match("^CLIENT_BALL_%d+$") then
+            local id = model.Name:match("%d+")
+            if id then return tonumber(id) end
+        end
+    end
+    return nil
+end
+
+local function getNearestBall()
+    local nearestBall, nearestDistance = nil, math.huge
+    local character = LocalPlayer.Character
+    if not character then return nil end
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return nil end
+    for _, model in ipairs(Workspace:GetChildren()) do
+        if model:IsA("Model") and model.Name:match("^CLIENT_BALL_%d+$") then
+            for _, part in ipairs(model:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    local distance = (part.Position - rootPart.Position).Magnitude
+                    if distance < nearestDistance then
+                        nearestDistance = distance
+                        nearestBall = part
+                    end
+                    break
+                end
+            end
+        end
+    end
+    return nearestBall
+end
+
+local function getBallRoot()
+    for _, model in ipairs(Workspace:GetChildren()) do
+        if model:IsA("Model") and model.Name:match("^CLIENT_BALL_%d+$") then
+            for _, part in ipairs(model:GetDescendants()) do
+                if part:IsA("BasePart") then return part end
+            end
+        end
+    end
+    return nil
+end
+
+local function getHRP()
+    local c = LocalPlayer.Character
+    return c and c:FindFirstChild("HumanoidRootPart")
+end
+
+local redirectSpikeEnabled = false
+local redirectSpikeInstalled = false
+local sanjuTiltEnabled = false
+local sanjuTiltInstalled = false
+local maxChargeEnabled = false
+local maxChargeHookActive = false
+local mtMaxCharge = nil
+local oldNamecallMaxCharge = nil
+local newSilentSpikeEnabled = false
+local newSpikeButton = nil
+local stopBallButton = nil
+local aimButton = nil
+local stopBallVisible = false
+local aimVisible = false
+local dashButton = nil
+local akariDashEnabled = false
+local leadFeetEnabled = false
+local leadFeetButton = nil
+local leadFeetLink = nil
+local espJumpEnabled = false
+local espHighlights = {}
+local espConnections = {}
+local desyncEnabled = false
+local desyncConnection = nil
+local maxServeEnabled = false
+local maxServeHookActive = false
+local mtMaxServe = nil
+local oldNamecallMaxServe = nil
+local airMovement = false
+local airMovementSpeed = 16
+local bodyVelocity = nil
+local autoShiftLockEnabled = false
+local shiftLockConnection = nil
+local hitEffectEnabled = false
+local selectedEffect = "SupernovaScoreEffect"
+local hasFired = false
+local isLocalHit = false
+local hitConnection = nil
+local hitConnection2 = nil
+local hitRemovedConnection = nil
+local effectList = {}
+local playerCardEnabled = false
+local selectedCard = "UltimateChampionPlayerCard"
+local hasFiredCard = false
+local isProcessing = false
+local cardConnection = nil
+local cardList = {}
+local selectedJersey = "DragonTuxedoJersey"
+local pickedTeam = nil
+local jerseyList = {}
+local selectedBallSkin = "ClassicBall"
+local ballSkinList = {}
+local autoSpin = false
+local autoAbilitySpin = false
+local desiredStyles = {}
+local desiredAbilities = {}
+local spinType = "Normal"
+local abilitySpinType = "Normal"
+local autoApplyJersey = false
+local autoApplyBallSkin = false
+local fakeSpikeEnabled = false
+local tshAnimationEnabled = false
+local hidariAnimationEnabled = false
+local kazanaBlueEnabled = false
+local kazanaWhiteEnabled = false
+
+local originals = {}
+local clones = {}
+local seen = {}
+
+local linesEnabled = false
+local lineDistance = 50
+local lines = {}
+local lineColors = {
+    Color3.fromRGB(255, 0, 0),
+    Color3.fromRGB(0, 255, 0),
+    Color3.fromRGB(0, 0, 255),
+    Color3.fromRGB(255, 165, 0),
+    Color3.fromRGB(128, 0, 128),
+    Color3.fromRGB(255, 255, 0),
+    Color3.fromRGB(139, 0, 0),
+    Color3.fromRGB(0, 100, 0)
+}
+
+local changedProperties = {}
+local oldQualityLevel
+local oldSavedQualityLevel
+local antilagConnections = {}
+
+local AutoFarm = {
+    enabled = false,
+    gui = nil,
+    loopThread = nil,
+    heartbeatLink = nil,
+    state = { tp = false, block = false, spike = false, jump = false, interval = 0.05 },
+    jumpState = false,
+}
+
+function AutoFarm:getRemotes()
+    if self.remotes then return self.remotes end
+    local svc = ReplicatedStorage.Packages._Index["sleitnick_knit@1.7.0"].knit.Services.BallService
+    self.remotes = {
+        CreateHitbox = svc.RF:FindFirstChild("CreateHitbox"),
+        Interact = svc.RF:FindFirstChild("Interact"),
+        Jump = svc.RF:FindFirstChild("Jump"),
+        UpdateTilt = svc.RF:FindFirstChild("UpdateTilt"),
+    }
+    return self.remotes
+end
+
+function AutoFarm:getBall()
+    for _, v in ipairs(Workspace:GetDescendants()) do
+        if typeof(v.Name) == "string" and v.Name:sub(1, 12) == "CLIENT_BALL_" then
+            local part = v:IsA("BasePart") and v or v:FindFirstChildWhichIsA("BasePart", true)
+            if part then
+                local id = tonumber(v.Name:sub(13)) or v:GetAttribute("ServerId") or v:GetAttribute("Id")
+                if id then return part, id end
+            end
+        end
+    end
+    return nil, 0
+end
+
+function AutoFarm:timestamp()
+    local t = Workspace:GetServerTimeNow()
+    if typeof(t) == "number" then return t end
+    return tick()
+end
+
+function AutoFarm:buildGUI()
+    if self.gui then return end
+    local sg = Instance.new("ScreenGui")
+    sg.Name = MARK .. "_Farm"
+    sg.ResetOnSpawn = false
+    sg.IgnoreGuiInset = true
+    sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    sg.DisplayOrder = 9999
+
+    local placed = false
+    if type(gethui) == "function" then
+        local ok, container = pcall(gethui)
+        if ok and typeof(container) == "Instance" then
+            sg.Parent = container
+            placed = true
+        end
+    end
+    if not placed then
+        local ok = pcall(function()
+            sg.Parent = game:GetService("CoreGui")
+        end)
+        if ok then placed = true end
+    end
+    if not placed then
+        sg.Parent = LocalPlayer:WaitForChild("PlayerGui")
+    end
+
+    local f = Instance.new("Frame")
+    f.Size = UDim2.new(0, 150, 0, 175)
+    f.Position = UDim2.new(0.05, 0, 0.3, 0)
+    f.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    f.BorderSizePixel = 0
+    f.Active = true
+    f.Draggable = true
+    f.Parent = sg
+    local fc = Instance.new("UICorner", f)
+    fc.CornerRadius = UDim.new(0, 8)
+
+    local title = Instance.new("TextLabel", f)
+    title.Size = UDim2.new(1, 0, 0, 22)
+    title.BackgroundTransparency = 1
+    title.Text = "Auto Farm"
+    title.TextColor3 = Color3.fromRGB(238, 240, 248)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 13
+
+    local function mkTog(y, txt, key)
+        local b = Instance.new("TextButton", f)
+        b.Size = UDim2.new(0, 134, 0, 24)
+        b.Position = UDim2.new(0, 8, 0, y)
+        b.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
+        b.Text = txt .. " OFF"
+        b.TextColor3 = Color3.fromRGB(238, 240, 248)
+        b.TextSize = 12
+        b.Font = Enum.Font.GothamBold
+        b.AutoButtonColor = false
+        local bc = Instance.new("UICorner", b)
+        bc.CornerRadius = UDim.new(0, 6)
+        b.MouseButton1Click:Connect(function()
+            self.state[key] = not self.state[key]
+            b.Text = txt .. " " .. (self.state[key] and "ON" or "OFF")
+            b.BackgroundColor3 = self.state[key] and Color3.fromRGB(0, 140, 0) or Color3.fromRGB(55, 55, 55)
+        end)
+    end
+
+    mkTog(26, "TP", "tp")
+    mkTog(54, "BALL", "block")
+    mkTog(82, "SPIKE", "spike")
+    mkTog(110, "JUMP", "jump")
+
+    local tb = Instance.new("TextBox", f)
+    tb.Size = UDim2.new(0, 134, 0, 24)
+    tb.Position = UDim2.new(0, 8, 0, 140)
+    tb.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    tb.Text = "0.05"
+    tb.PlaceholderText = "interval"
+    tb.TextColor3 = Color3.fromRGB(238, 240, 248)
+    tb.TextSize = 13
+    tb.Font = Enum.Font.GothamMedium
+    tb.ClearTextOnFocus = false
+    local tc = Instance.new("UICorner", tb)
+    tc.CornerRadius = UDim.new(0, 6)
+    tb:GetPropertyChangedSignal("Text"):Connect(function()
+        self.state.interval = tonumber(tb.Text) or 0.05
+    end)
+
+    self.gui = sg
+end
+
+function AutoFarm:start()
+    if self.enabled then return end
+    self.enabled = true
+    self:buildGUI()
+    self:getRemotes()
+
+    if self.heartbeatLink then self.heartbeatLink:Disconnect() end
+    self.heartbeatLink = RunService.Heartbeat:Connect(function()
+        if not self.enabled or not self.state.tp then return end
+        local ball = select(1, self:getBall())
+        local hrp = getHRP()
+        if ball and hrp then hrp.CFrame = ball.CFrame end
+    end)
+
+    self.loopThread = task.spawn(function()
+        while self.enabled do
+            local waitT = self.state.interval or 0.05
+            local ball, bid = self:getBall()
+            local hrp = getHRP()
+            local look = Camera and Camera.CFrame.LookVector or Vector3.new(0, 0, -1)
+            local move = hrp and hrp.CFrame.LookVector or Vector3.zero
+            local tilt = Vector3.new(0, 1, 0)
+            local ts = self:timestamp()
+            local remotes = self.remotes
+
+            if self.state.block and bid ~= 0 and ball and remotes.CreateHitbox and remotes.Interact then
+                local key = "Block" .. math.random(1000000, 9999999)
+                remotes.CreateHitbox:InvokeServer({
+                    BallId = bid, Charge = 1, Key = key,
+                    ClientTimestamp = ts, Move = "Block"
+                })
+                remotes.Interact:InvokeServer({
+                    Charge = 1, Move = "Block", SpecialCharge = 0,
+                    TiltDirection = tilt, BallId = bid, MoveDirection = move,
+                    Key = key, From = "Client", LookVector = look,
+                    Timestamp = ts, ClientCanRunSpecial = false, CustomClient = {}
+                })
+            end
+
+            if self.state.spike and bid ~= 0 and ball and remotes.Interact then
+                local realTilt = Vector3.new(look.X, 1, look.Z)
+                remotes.Interact:InvokeServer({
+                    Charge = 1, Move = "Spike", SpecialCharge = 0,
+                    TiltDirection = realTilt, LookVector = look,
+                    MoveDirection = move, ClientCanRunSpecial = false,
+                    From = "Client", Timestamp = ts, BallId = bid, CustomClient = {}
+                })
+            end
+
+            if self.state.jump and remotes.Jump then
+                self.jumpState = not self.jumpState
+                remotes.Jump:InvokeServer(self.jumpState)
+            end
+
+            task.wait(waitT)
+        end
+    end)
+end
+
+function AutoFarm:stop()
+    self.enabled = false
+    if self.heartbeatLink then self.heartbeatLink:Disconnect() self.heartbeatLink = nil end
+    self.loopThread = nil
+    self.state.tp = false
+    self.state.block = false
+    self.state.spike = false
+    self.state.jump = false
+    self.jumpState = false
+    if self.gui then self.gui:Destroy() self.gui = nil end
+end
+
+local AutoCounter = {
+    enabled = false,
+    move = "Auto",
+    netRange = 9,
+    lateral = 14,
+    reach = 16,
+    delay = 0.05,
+    cooldown = 0.5,
+    autoJump = true,
+    handlers = nil,
+    controller = nil,
+    firing = false,
+    lastFire = 0,
+}
+
+function AutoCounter:bind()
+    if self.handlers and self.controller then return true end
+    local restore = getthreadidentity and getthreadidentity()
+    if setthreadidentity then setthreadidentity(2) end
+    self.handlers = require(game:GetService("ReplicatedFirst").Controllers.GameController.Handlers)
+    self.controller = require(ReplicatedStorage.Packages.Knit).GetController("GameController")
+    if setthreadidentity and restore then setthreadidentity(restore) end
+    return self.handlers ~= nil and self.controller ~= nil
+end
+
+function AutoCounter:getNet()
+    local tagged = CollectionService:GetTagged("Net")[1]
+    if tagged and tagged:IsA("BasePart") then return tagged end
+    local map = Workspace:FindFirstChild("Map")
+    local collide = map and map:FindFirstChild("BallCollideOnly")
+    return collide and collide:FindFirstChild("Net")
+end
+
+function AutoCounter:ownSide(root, netZ)
+    local team = LocalPlayer.Team
+    local index = team and team:GetAttribute("Index")
+    if index == 1 then return -1 end
+    if index == 2 then return 1 end
+    return (root.Position.Z >= netZ) and 1 or -1
+end
+
+function AutoCounter:findThreat(root, net)
+    local netZ = net.Position.Z
+    local netTop = net.Position.Y + net.Size.Y * 0.5
+    local side = self:ownSide(root, netZ)
+    local myGap = (root.Position.Z - netZ) * side
+    if myGap < 0 or myGap > self.netRange then return nil end
+    local ball = getNearestBall()
+    if not ball then return nil end
+    if ball.Position.Y < netTop - 3 then return nil end
+    if math.abs(ball.Position.Z - netZ) > self.netRange + 6 then return nil end
+    if math.abs(ball.Position.X - root.Position.X) > self.lateral then return nil end
+    local myTeam = LocalPlayer.Team
+    for _, player in ipairs(Players:GetPlayers()) do
+        local hostile = player ~= LocalPlayer and (myTeam == nil or player.Team ~= myTeam)
+        if hostile then
+            local character = player.Character
+            local enemyRoot = character and character:FindFirstChild("HumanoidRootPart")
+            if enemyRoot and character:GetAttribute("Jumping") then
+                local enemyGap = (enemyRoot.Position.Z - netZ) * side
+                if enemyGap < 0 and -enemyGap <= self.netRange + 4
+                    and (ball.Position - enemyRoot.Position).Magnitude <= self.reach
+                    and math.abs(enemyRoot.Position.X - root.Position.X) <= self.lateral then
+                    return ball, netZ, side
+                end
+            end
+        end
+    end
+    return nil
+end
+
+function AutoCounter:pickMove(ball, netZ, side)
+    if self.move ~= "Auto" then return self.move end
+    if (ball.Position.Z - netZ) * side > 0 then return "Spike" end
+    return "Block"
+end
+
+function AutoCounter:fire(move)
+    if not self:bind() then return end
+    local states = self.handlers.States
+    if states.IsBusy:get() or states.IsStunned:get() or states.IsServing:get() then return end
+    if not states.IsPlaying:get() then return end
+    if ReplicatedStorage:GetAttribute("ServedByTeam") then return end
+    self.firing = true
+    task.spawn(function()
+        local restore = getthreadidentity and getthreadidentity()
+        if setthreadidentity then setthreadidentity(2) end
+        if self.autoJump and not states.IsJumping:get() then
+            self.controller:PerformJump()
+        end
+        if self.delay > 0 then task.wait(self.delay) end
+        self.controller:DoMove({
+            ActionName = move, IsAerial = true,
+            InputState = Enum.UserInputState.Begin, Metadata = {}
+        })
+        if setthreadidentity and restore then setthreadidentity(restore) end
+        self.lastFire = os.clock()
+        self.firing = false
+    end)
+end
+
+function AutoCounter:step()
+    if not self.enabled or self.firing then return end
+    if os.clock() - self.lastFire < self.cooldown then return end
+    local character = LocalPlayer.Character
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    local net = self:getNet()
+    if not net then return end
+    local ball, netZ, side = self:findThreat(root, net)
+    if not ball then return end
+    self:fire(self:pickMove(ball, netZ, side))
+end
+
+RunService.Heartbeat:Connect(function()
+    AutoCounter:step()
+end)
+
+local SAGEBAIT = {
+    NameTag = "PARASITE PROTECTION",
+    Title = "<font color='#FF0000'><b>Pro</b></font>",
+    NotifConn = nil, NotifConn2 = nil, CardLoopConn = nil, CharWatcher = nil,
+    Enabled = true,
+}
+
+local function updateNametag()
+    if not SAGEBAIT.Enabled then return end
+    local player = LocalPlayer
+    if player and player.Character then
+        local nameTag = player.Character:FindFirstChild("Nametag")
+        if nameTag then
+            local label = nameTag:FindFirstChild("PlayerName")
+            if label and label:IsA("TextLabel") then label.Text = SAGEBAIT.NameTag end
+        end
+    end
+end
+
+local function updateTitle()
+    if not SAGEBAIT.Enabled then return end
+    if LocalPlayer then LocalPlayer:SetAttribute("User_Title", SAGEBAIT.Title) end
+end
+
+local function processNotification(notification)
+    if not SAGEBAIT.Enabled or not notification then return end
+    local player = LocalPlayer
+    if not player then return end
+    task.wait(0.2)
+    if not SAGEBAIT.Enabled then return end
+    local textLabel = notification:FindFirstChild("TextLabel")
+    if not textLabel then
+        for _, child in ipairs(notification:GetDescendants()) do
+            if child:IsA("TextLabel") then textLabel = child break end
+        end
+    end
+    if not textLabel then return end
+    local text = textLabel.Text or ""
+    if string.find(text, player.Name) then
+        textLabel.Text = string.gsub(text, player.Name, SAGEBAIT.NameTag)
+    end
+end
+
+local function setupNotifications()
+    if SAGEBAIT.NotifConn then SAGEBAIT.NotifConn:Disconnect() SAGEBAIT.NotifConn = nil end
+    if SAGEBAIT.NotifConn2 then SAGEBAIT.NotifConn2:Disconnect() SAGEBAIT.NotifConn2 = nil end
+    if not SAGEBAIT.Enabled then return end
+    local player = LocalPlayer
+    if not player then return end
+    local gui = player.PlayerGui:FindFirstChild("Interface")
+    if gui then
+        gui = gui:FindFirstChild("Persistent")
+        if gui then gui = gui:FindFirstChild("Notifications") end
+    end
+    if not gui then return end
+    for _, child in ipairs(gui:GetChildren()) do processNotification(child) end
+    SAGEBAIT.NotifConn = gui.ChildAdded:Connect(function(child) processNotification(child) end)
+    SAGEBAIT.NotifConn2 = gui.DescendantAdded:Connect(function(child)
+        if child:IsA("TextLabel") then processNotification(child) end
+    end)
+end
+
+local function protectPlayerCard()
+    if not SAGEBAIT.Enabled then return end
+    local playerName = string.upper(LocalPlayer.Name)
+    local persistent = LocalPlayer.PlayerGui:FindFirstChild("Interface")
+    if persistent then
+        persistent = persistent:FindFirstChild("Persistent")
+        if persistent then
+            for _, child in ipairs(persistent:GetChildren()) do
+                if child.Name == "FlashPlayerCardFrame" then
+                    local username = child:FindFirstChild("Username", true)
+                    if username and username:IsA("TextLabel") then
+                        local currentText = string.upper(username.Text or "")
+                        if string.find(currentText, playerName) then username.Text = SAGEBAIT.NameTag end
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function startCardLoop()
+    if SAGEBAIT.CardLoopConn then SAGEBAIT.CardLoopConn:Disconnect() SAGEBAIT.CardLoopConn = nil end
+    if not SAGEBAIT.Enabled then return end
+    SAGEBAIT.CardLoopConn = RunService.Heartbeat:Connect(protectPlayerCard)
+end
+
+local function stopCardLoop()
+    if SAGEBAIT.CardLoopConn then SAGEBAIT.CardLoopConn:Disconnect() SAGEBAIT.CardLoopConn = nil end
+end
+
+local function installCharacterWatcher()
+    if SAGEBAIT.CharWatcher then SAGEBAIT.CharWatcher:Disconnect() SAGEBAIT.CharWatcher = nil end
+    if not SAGEBAIT.Enabled then return end
+    SAGEBAIT.CharWatcher = LocalPlayer.CharacterAdded:Connect(function()
+        task.wait(0.5)
+        updateNametag()
+        updateTitle()
+        setupNotifications()
+    end)
+end
+
+local function toggleProtection(state)
+    SAGEBAIT.Enabled = state and true or false
+    if state then
+        updateNametag(); updateTitle(); setupNotifications()
+        startCardLoop(); installCharacterWatcher(); protectPlayerCard()
+    else
+        if SAGEBAIT.NotifConn then SAGEBAIT.NotifConn:Disconnect() SAGEBAIT.NotifConn = nil end
+        if SAGEBAIT.NotifConn2 then SAGEBAIT.NotifConn2:Disconnect() SAGEBAIT.NotifConn2 = nil end
+        if SAGEBAIT.CharWatcher then SAGEBAIT.CharWatcher:Disconnect() SAGEBAIT.CharWatcher = nil end
+        stopCardLoop()
+        if LocalPlayer.Character then
+            local nameTag = LocalPlayer.Character:FindFirstChild("Nametag")
+            if nameTag then
+                local label = nameTag:FindFirstChild("PlayerName")
+                if label and label:IsA("TextLabel") then label.Text = LocalPlayer.Name end
+            end
+        end
+        LocalPlayer:SetAttribute("User_Title", "")
+    end
+end
+
+_G.enablePARASITE = toggleProtection
+toggleProtection(true)
+
+local CustomProtect = {
+    Enabled = false, Name = "CUSTOM NAME",
+    Title = "<font color='#00FF00'><b>Custom</b></font>",
+    NotifConn = nil, NotifConn2 = nil, CardLoopConn = nil, CharWatcher = nil,
+}
+
+CustomProtect.updateNametag = function()
+    if not CustomProtect.Enabled then return end
+    local player = LocalPlayer
+    if player and player.Character then
+        local nameTag = player.Character:FindFirstChild("Nametag")
+        if nameTag then
+            local label = nameTag:FindFirstChild("PlayerName")
+            if label and label:IsA("TextLabel") then label.Text = CustomProtect.Name end
+        end
+    end
+end
+
+CustomProtect.updateTitle = function()
+    if not CustomProtect.Enabled then return end
+    if LocalPlayer then LocalPlayer:SetAttribute("User_Title", CustomProtect.Title) end
+end
+
+CustomProtect.processNotification = function(notification)
+    if not CustomProtect.Enabled or not notification then return end
+    local player = LocalPlayer
+    if not player then return end
+    local textLabel = notification:FindFirstChild("TextLabel")
+    if not textLabel then
+        for _, child in ipairs(notification:GetDescendants()) do
+            if child:IsA("TextLabel") then textLabel = child break end
+        end
+    end
+    if not textLabel then return end
+    local text = textLabel.Text or ""
+    if string.find(text, player.Name) then
+        textLabel.Text = string.gsub(text, player.Name, CustomProtect.Name)
+    end
+end
+
+CustomProtect.setupNotifications = function()
+    if CustomProtect.NotifConn then CustomProtect.NotifConn:Disconnect() CustomProtect.NotifConn = nil end
+    if CustomProtect.NotifConn2 then CustomProtect.NotifConn2:Disconnect() CustomProtect.NotifConn2 = nil end
+    if not CustomProtect.Enabled then return end
+    local player = LocalPlayer
+    if not player then return end
+    local gui = player.PlayerGui:FindFirstChild("Interface")
+    if gui then
+        gui = gui:FindFirstChild("Persistent")
+        if gui then gui = gui:FindFirstChild("Notifications") end
+    end
+    if not gui then return end
+    for _, child in ipairs(gui:GetChildren()) do CustomProtect.processNotification(child) end
+    CustomProtect.NotifConn = gui.ChildAdded:Connect(CustomProtect.processNotification)
+    CustomProtect.NotifConn2 = gui.DescendantAdded:Connect(function(child)
+        if child:IsA("TextLabel") then CustomProtect.processNotification(child) end
+    end)
+end
+
+CustomProtect.protectPlayerCard = function()
+    if not CustomProtect.Enabled then return end
+    local playerName = string.upper(LocalPlayer.Name)
+    local persistent = LocalPlayer.PlayerGui:FindFirstChild("Interface")
+    if persistent then
+        persistent = persistent:FindFirstChild("Persistent")
+        if persistent then
+            for _, child in ipairs(persistent:GetChildren()) do
+                if child.Name == "FlashPlayerCardFrame" then
+                    local username = child:FindFirstChild("Username", true)
+                    if username and username:IsA("TextLabel") then
+                        local currentText = string.upper(username.Text or "")
+                        if string.find(currentText, playerName) then username.Text = CustomProtect.Name end
+                    end
+                end
+            end
+        end
+    end
+end
+CustomProtect.toggle = function(state)
+    CustomProtect.Enabled = state and true or false
+    if state then
+        CustomProtect.updateNametag(); CustomProtect.updateTitle()
+        CustomProtect.setupNotifications(); CustomProtect.protectPlayerCard()
+        if CustomProtect.CardLoopConn then CustomProtect.CardLoopConn:Disconnect() end
+        CustomProtect.CardLoopConn = RunService.Heartbeat:Connect(CustomProtect.protectPlayerCard)
+        if CustomProtect.CharWatcher then CustomProtect.CharWatcher:Disconnect() end
+        CustomProtect.CharWatcher = LocalPlayer.CharacterAdded:Connect(function()
+            task.wait(0.5)
+            CustomProtect.updateNametag()
+            CustomProtect.updateTitle()
+            CustomProtect.setupNotifications()
+        end)
+    else
+        if CustomProtect.NotifConn then CustomProtect.NotifConn:Disconnect() CustomProtect.NotifConn = nil end
+        if CustomProtect.NotifConn2 then CustomProtect.NotifConn2:Disconnect() CustomProtect.NotifConn2 = nil end
+        if CustomProtect.CardLoopConn then CustomProtect.CardLoopConn:Disconnect() CustomProtect.CardLoopConn = nil end
+        if CustomProtect.CharWatcher then CustomProtect.CharWatcher:Disconnect() CustomProtect.CharWatcher = nil end
+        if LocalPlayer.Character then
+            local nameTag = LocalPlayer.Character:FindFirstChild("Nametag")
+            if nameTag then
+                local label = nameTag:FindFirstChild("PlayerName")
+                if label and label:IsA("TextLabel") then label.Text = LocalPlayer.Name end
+            end
+        end
+        LocalPlayer:SetAttribute("User_Title", "")
+    end
+end
+
+local RandomVisual = { EffectEnabled = false, CardEnabled = false, BallEnabled = false }
+
+local function getRandomFromFolder(folderPath)
+    local folder
+    if type(folderPath) == "string" then
+        folder = ReplicatedStorage.Assets:FindFirstChild(folderPath)
+        if not folder then folder = ReplicatedStorage:FindFirstChild(folderPath) end
+        if not folder then folder = ReplicatedStorage.Content:FindFirstChild(folderPath) end
+    end
+    if not folder then return nil end
+    local items = {}
+    for _, child in ipairs(folder:GetChildren()) do
+        if child:IsA("ModuleScript") or child:IsA("Model") or child:IsA("Folder") then
+            table.insert(items, child.Name)
+        end
+    end
+    if #items == 0 then return nil end
+    return items[math.random(1, #items)]
+end
+
+local function applyRandomEffect()
+    local randomEffect = getRandomFromFolder("ScoreEffect")
+    if randomEffect then
+        selectedEffect = randomEffect
+        Parasite:Notify({ Title = "Random Effect", Content = randomEffect, Type = "Success", Duration = 2 })
+    end
+end
+
+local function applyRandomBall()
+    local randomBall = getRandomFromFolder("Ball")
+    if randomBall then
+        selectedBallSkin = randomBall
+        if autoApplyBallSkin then sweep() end
+        Parasite:Notify({ Title = "Random Ball", Content = randomBall, Type = "Success", Duration = 2 })
+    end
+end
+
+local function onHitIndicator(child)
+    if not RandomVisual.EffectEnabled then return end
+    if child.Name == "HitIndicator" then applyRandomEffect() end
+end
+
+local function onBallAppear(model)
+    if not RandomVisual.BallEnabled then return end
+    if model:IsA("Model") and model.Name:match("^CLIENT_BALL_") then
+        task.wait(0.1)
+        applyRandomBall()
+    end
+end
+
+Workspace.ChildAdded:Connect(onBallAppear)
+Workspace.DescendantAdded:Connect(onHitIndicator)
+
+local function fireCardRemote()
+    if hasFiredCard or isProcessing then return end
+    local Remote = ReplicatedStorage.Packages._Index["sleitnick_knit@1.7.0"].knit.Services.PlayerCardService.RE.OnFlashCard
+    if Remote and firesignal then
+        isProcessing = true
+        hasFiredCard = true
+        firesignal(Remote.OnClientEvent, {
+            ["PlayerCardItemId"] = selectedCard,
+            ["Context"] = { ["Custom"] = {}, ["PlacementId"] = "ScoredPoint" },
+            ["Player"] = LocalPlayer,
+        })
+        task.wait(0.3)
+        hasFiredCard = false
+        isProcessing = false
+    end
+end
+
+local function applyPlayerCard(cardName)
+    if cardName and cardName ~= "" then selectedCard = cardName end
+    if not playerCardEnabled then return end
+    seen.__cardFiredFor = nil
+    fireCardRemote()
+end
+
+local function changePlayerCard()
+    if isProcessing then return end
+    if not playerCardEnabled and not RandomVisual.CardEnabled then return end
+    local persistent = LocalPlayer.PlayerGui:FindFirstChild("Interface")
+    if persistent then
+        persistent = persistent:FindFirstChild("Persistent")
+        if persistent then
+            for _, child in ipairs(persistent:GetChildren()) do
+                if child.Name == "FlashPlayerCardFrame" then
+                    local username = child:FindFirstChild("Username", true)
+                    if username and username:IsA("TextLabel") then
+                        local currentText = string.upper(username.Text or "")
+                        local playerName = string.upper(LocalPlayer.Name)
+                        if string.find(currentText, playerName) then
+                            if seen.__cardFiredFor == child then return end
+                            if RandomVisual.CardEnabled then
+                                local randomCard = getRandomFromFolder("PlayerCard")
+                                if randomCard then selectedCard = randomCard end
+                            end
+                            seen.__cardFiredFor = child
+                            child:Destroy()
+                            task.wait(0.1)
+                            fireCardRemote()
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function enablePlayerCard()
+    if cardConnection then return end
+    local persistent = LocalPlayer.PlayerGui:FindFirstChild("Interface")
+    if persistent then
+        persistent = persistent:FindFirstChild("Persistent")
+        if persistent then
+            cardConnection = persistent.ChildAdded:Connect(function(child)
+                if child.Name == "FlashPlayerCardFrame" then
+                    task.wait(0.1)
+                    changePlayerCard()
+                end
+            end)
+        end
+    end
+end
+
+local function disablePlayerCard()
+    if cardConnection then cardConnection:Disconnect() cardConnection = nil end
+    seen.__cardFiredFor = nil
+    hasFiredCard = false
+    isProcessing = false
+end
+
+local BallESP = { enabled = false, color = Color3.fromRGB(255, 80, 80), currentPlayer = nil, originalColors = {}, connection = nil }
+
+BallESP.saveAndPaint = function(character)
+    if not character then return end
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            if BallESP.originalColors[part] == nil then BallESP.originalColors[part] = part.Color end
+            part.Color = BallESP.color
+        end
+    end
+end
+
+BallESP.restoreColors = function(character)
+    if not character then return end
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart") and BallESP.originalColors[part] then
+            part.Color = BallESP.originalColors[part]
+            BallESP.originalColors[part] = nil
+        end
+    end
+end
+
+BallESP.clearCurrent = function()
+    if BallESP.currentPlayer then
+        BallESP.restoreColors(BallESP.currentPlayer.Character)
+        BallESP.currentPlayer = nil
+    end
+end
+
+BallESP.start = function()
+    if BallESP.connection then return end
+    local Remote = ReplicatedStorage.Packages._Index["sleitnick_knit@1.7.0"].knit.Services.BallService.RE.BallTouched
+    if not Remote then return end
+    BallESP.connection = Remote.OnClientEvent:Connect(function(player)
+        if not BallESP.enabled then return end
+        if not (typeof(player) == "Instance" and player:IsA("Player")) then return end
+        if BallESP.currentPlayer and BallESP.currentPlayer ~= player then
+            BallESP.restoreColors(BallESP.currentPlayer.Character)
+        end
+        if BallESP.currentPlayer ~= player then
+            local char = player.Character
+            if char then BallESP.saveAndPaint(char)
+            else
+                player.CharacterAdded:Once(function(c)
+                    task.wait(0.1)
+                    if BallESP.enabled then BallESP.saveAndPaint(c) end
+                end)
+            end
+        end
+        BallESP.currentPlayer = player
+    end)
+end
+
+BallESP.stop = function()
+    if BallESP.connection then BallESP.connection:Disconnect() BallESP.connection = nil end
+    BallESP.clearCurrent()
+end
+
+BallESP.setColor = function(color)
+    BallESP.color = color
+    if BallESP.enabled and BallESP.currentPlayer then BallESP.saveAndPaint(BallESP.currentPlayer.Character) end
+end
+
+local AutoReceive = {
+    enabled = false,
+    wasInRange = false,
+    cooldownActive = false,
+    radius = 20,
+    method = "Bump",
+    connection = nil,
+    charConnection = nil,
+}
+
+AutoReceive.getNearestBall = function()
+    local nearestBall, nearestDistance = nil, math.huge
+    local character = LocalPlayer.Character
+    if not character then return nil, nil end
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return nil, nil end
+    for _, model in ipairs(Workspace:GetChildren()) do
+        if model:IsA("Model") and model.Name:match("^CLIENT_BALL_%d+$") then
+            for _, part in ipairs(model:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    local d = (part.Position - rootPart.Position).Magnitude
+                    if d < nearestDistance then nearestDistance = d nearestBall = part end
+                    break
+                end
+            end
+        end
+    end
+    return nearestBall, nearestDistance
+end
+
+AutoReceive.isOnGround = function()
+    local character = LocalPlayer.Character
+    if not character then return false end
+    local humanoid = character:FindFirstChild("Humanoid")
+    if not humanoid then return false end
+    return humanoid.FloorMaterial ~= Enum.Material.Air
+end
+
+AutoReceive.triggerCooldown = function()
+    AutoReceive.cooldownActive = true
+    AutoReceive.wasInRange = true
+    task.delay(2, function()
+        AutoReceive.cooldownActive = false
+        AutoReceive.wasInRange = false
+    end)
+end
+
+AutoReceive.fireMethod = function()
+    if not firesignal then return end
+    local method = AutoReceive.method
+    if method == "Bump" then
+        firesignal(doMove.OnClientEvent, "Bump", false, false)
+        firesignal(StopAllEmotes.OnClientEvent)
+    elseif method == "Set" then
+        firesignal(doMove.OnClientEvent, "Set", false, false)
+        firesignal(StopAllEmotes.OnClientEvent)
+    elseif method == "Dive" then
+        firesignal(doMove.OnClientEvent, "Dive", false, false)
+        firesignal(StopAllEmotes.OnClientEvent)
+    end
+end
+
+AutoReceive.step = function()
+    if not AutoReceive.enabled or AutoReceive.cooldownActive then return end
+    local character = LocalPlayer.Character
+    if not character then return end
+    local humanoid = character:FindFirstChild("Humanoid")
+    if not humanoid then return end
+    if humanoid:GetState() == Enum.HumanoidStateType.Jumping
+        or humanoid:GetState() == Enum.HumanoidStateType.Freefall
+        or humanoid.Jump == true then
+        AutoReceive.wasInRange = false
+        return
+    end
+    if not AutoReceive.isOnGround() then AutoReceive.wasInRange = false return end
+    local ball, distance = AutoReceive.getNearestBall()
+    if not ball then AutoReceive.wasInRange = false return end
+    local isInRange = distance <= AutoReceive.radius
+    if isInRange and not AutoReceive.wasInRange then
+        AutoReceive.fireMethod()
+        AutoReceive.triggerCooldown()
+    end
+    AutoReceive.wasInRange = isInRange
+end
+
+AutoReceive.start = function()
+    if AutoReceive.connection then return end
+    AutoReceive.connection = RunService.Heartbeat:Connect(AutoReceive.step)
+    if not AutoReceive.charConnection then
+        AutoReceive.charConnection = LocalPlayer.CharacterAdded:Connect(function()
+            AutoReceive.wasInRange = false
+            AutoReceive.cooldownActive = false
+        end)
+    end
+end
+
+AutoReceive.stop = function()
+    if AutoReceive.connection then AutoReceive.connection:Disconnect() AutoReceive.connection = nil end
+    if AutoReceive.charConnection then AutoReceive.charConnection:Disconnect() AutoReceive.charConnection = nil end
+    AutoReceive.wasInRange = false
+    AutoReceive.cooldownActive = false
+end
+
+AutoReceive.setRadius = function(value)
+    AutoReceive.radius = value or 20
+end
+
+AutoReceive.setMethod = function(value)
+    AutoReceive.method = value or "Bump"
+end
+
+local AutoSet = { enabled = false, connection = nil, lookVector = nil, direction = nil, tilt = nil, mode = "Nearest" }
+
+AutoSet.isSameTeam = function(player)
+    local myTeam = LocalPlayer.Team
+    if not myTeam then return false end
+    return player.Team == myTeam
+end
+
+AutoSet.getTarget = function()
+    local myChar = LocalPlayer.Character
+    if not myChar then return nil end
+    local myHRP = myChar:FindFirstChild("HumanoidRootPart")
+    if not myHRP then return nil end
+    local candidates = {}
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and AutoSet.isSameTeam(player) then
+            local char = player.Character
+            if char then
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                local humanoid = char:FindFirstChildOfClass("Humanoid")
+                if hrp and humanoid and humanoid.Health > 0 then table.insert(candidates, hrp) end
+            end
+        end
+    end
+    if #candidates == 0 then return nil end
+    if AutoSet.mode == "Random" then return candidates[math.random(1, #candidates)] end
+    local nearest, nearestDist = nil, math.huge
+    for _, hrp in ipairs(candidates) do
+        local d = (hrp.Position - myHRP.Position).Magnitude
+        if d < nearestDist then nearestDist = d nearest = hrp end
+    end
+    return nearest
+end
+
+AutoSet.calculateDirection = function()
+    local myChar = LocalPlayer.Character
+    if not myChar then return end
+    local myHRP = myChar:FindFirstChild("HumanoidRootPart")
+    if not myHRP then return end
+    local target = AutoSet.getTarget()
+    if not target then return end
+    local flat = Vector3.new(target.Position.X - myHRP.Position.X, 0, target.Position.Z - myHRP.Position.Z)
+    if flat.Magnitude < 0.01 then return end
+    local unit = flat.Unit
+    AutoSet.lookVector = Vector3.new(unit.X, 0, unit.Z)
+    AutoSet.direction = Vector3.new(unit.X, 0, unit.Z)
+    AutoSet.tilt = Vector3.new(unit.X, 1, unit.Z)
+end
+
+AutoSet.fire = function()
+    if not AutoSet.lookVector then return false end
+    local ballId = getBallId()
+    if not ballId then return false end
+    BallService.RF.Interact:InvokeServer({
+        ["Charge"] = 1, ["Move"] = "JumpSet", ["SpecialCharge"] = 1,
+        ["TiltDirection"] = AutoSet.tilt, ["LookVector"] = AutoSet.lookVector,
+        ["Direction"] = AutoSet.direction, ["MoveDirection"] = Vector3.new(0, 0, 0),
+        ["ClientCanRunSpecial"] = false, ["From"] = "Client",
+        ["Timestamp"] = Workspace:GetServerTimeNow(), ["BallId"] = ballId, ["CustomClient"] = {},
+    })
+    return true
+end
+
+AutoSet.start = function()
+    if AutoSet.connection then return end
+    AutoSet.connection = RunService.Heartbeat:Connect(function()
+        if AutoSet.enabled then AutoSet.calculateDirection() end
+    end)
+end
+
+AutoSet.stop = function()
+    if AutoSet.connection then AutoSet.connection:Disconnect() AutoSet.connection = nil end
+end
+
+local AimSet = { enabled = false, connection = nil, namecallOld = nil, hooked = false, direction = nil, mode = "Nearest" }
+AimSet.isSameTeam = AutoSet.isSameTeam
+
+AimSet.getTarget = function()
+    local myChar = LocalPlayer.Character
+    if not myChar then return nil end
+    local myHRP = myChar:FindFirstChild("HumanoidRootPart")
+    if not myHRP then return nil end
+    local candidates = {}
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and AimSet.isSameTeam(player) then
+            local char = player.Character
+            if char then
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                local humanoid = char:FindFirstChildOfClass("Humanoid")
+                if hrp and humanoid and humanoid.Health > 0 then table.insert(candidates, hrp) end
+            end
+        end
+    end
+    if #candidates == 0 then return nil end
+    if AimSet.mode == "Random" then return candidates[math.random(1, #candidates)] end
+    local nearest, nearestDist = nil, math.huge
+    for _, hrp in ipairs(candidates) do
+        local d = (hrp.Position - myHRP.Position).Magnitude
+        if d < nearestDist then nearestDist = d nearest = hrp end
+    end
+    return nearest
+end
+
+AimSet.calculateDirection = function()
+    local myChar = LocalPlayer.Character
+    if not myChar then return end
+    local myHRP = myChar:FindFirstChild("HumanoidRootPart")
+    if not myHRP then return end
+    local target = AimSet.getTarget()
+    if not target then AimSet.direction = nil return end
+    local flat = Vector3.new(target.Position.X - myHRP.Position.X, 0, target.Position.Z - myHRP.Position.Z)
+    if flat.Magnitude < 0.01 then AimSet.direction = nil return end
+    AimSet.direction = flat.Unit
+end
+
+AimSet.start = function()
+    if not BallService then return end
+    if AimSet.connection then return end
+    AimSet.connection = RunService.Heartbeat:Connect(function()
+        if AimSet.enabled then AimSet.calculateDirection() end
+    end)
+    if AimSet.hooked then return end
+    if not (getrawmetatable and setreadonly and getnamecallmethod) then return end
+    local mt = getrawmetatable(game)
+    AimSet.namecallOld = mt.__namecall
+    setreadonly(mt, false)
+    mt.__namecall = function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+        if AimSet.enabled and self == BallService.RF.Interact and method == "InvokeServer" then
+            local data = args[1]
+            if type(data) == "table" and data.Move == "JumpSet" then
+                if AimSet.direction then
+                    data.LookVector = Vector3.new(AimSet.direction.X, 0, AimSet.direction.Z)
+                    data.TiltDirection = Vector3.new(AimSet.direction.X, 1, AimSet.direction.Z)
+                    data.MoveDirection = Vector3.new(0, 0, 0)
+                end
+            end
+            return AimSet.namecallOld(self, data)
+        end
+        return AimSet.namecallOld(self, ...)
+    end
+    setreadonly(mt, true)
+    AimSet.hooked = true
+end
+
+AimSet.stop = function()
+    if AimSet.connection then AimSet.connection:Disconnect() AimSet.connection = nil end
+    AimSet.direction = nil
+end
+
+local JinkoCurve = {
+    enabled = false, connection = nil, namecallOld = nil, hooked = false,
+    config = {
+        Charge = 1, SpecialCharge = 0.9999993954121975,
+        TiltDirection = Vector3.new(-0.053983259946107864, 1, -0.9985418319702148),
+        HeightOffset = 2, NotifyCooldown = 0.5,
+    },
+    lastNotify = 0,
+}
+
+JinkoCurve.getBallRoot = function()
+    for _, model in ipairs(Workspace:GetChildren()) do
+        if model:IsA("Model") and model.Name:match("^CLIENT_BALL_%d+$") then
+            for _, part in ipairs(model:GetDescendants()) do
+                if part:IsA("BasePart") then return part end
+            end
+        end
+    end
+    return nil
+end
+
+JinkoCurve.getNet = function()
+    local map = Workspace:FindFirstChild("Map")
+    if not map then return nil end
+    local ballNoCollide = map:FindFirstChild("BallNoCollide")
+    if ballNoCollide then
+        local net = ballNoCollide:FindFirstChild("Net")
+        if net then return net end
+    end
+    local ballCollide = map:FindFirstChild("BallCollideOnly")
+    if ballCollide then return ballCollide:FindFirstChild("Net") end
+    return nil
+end
+
+JinkoCurve.checkSlingshot = function()
+    local ball = JinkoCurve.getBallRoot()
+    if not ball then return end
+    local net = JinkoCurve.getNet()
+    if not net then return end
+    local netTop = net.Position.Y + net.Size.Y * 0.5
+    local triggerHeight = netTop + JinkoCurve.config.HeightOffset
+    local now = os.clock()
+    if now - JinkoCurve.lastNotify < JinkoCurve.config.NotifyCooldown then return end
+    if math.abs(ball.Position.Y - triggerHeight) <= 1.5 then
+        JinkoCurve.lastNotify = now
+        Parasite:Notify({ Title = "SLINGSHOT", Content = "Indicator triggered", Icon = "activity", Type = "Warning", Duration = 2 })
+    end
+end
+
+JinkoCurve.start = function()
+    if not BallService then return end
+    if JinkoCurve.connection then return end
+    JinkoCurve.connection = RunService.Heartbeat:Connect(function()
+        if JinkoCurve.enabled then JinkoCurve.checkSlingshot() end
+    end)
+    if JinkoCurve.hooked then return end
+    if not (getrawmetatable and setreadonly and getnamecallmethod) then return end
+    local mt = getrawmetatable(game)
+    JinkoCurve.namecallOld = mt.__namecall
+    setreadonly(mt, false)
+    mt.__namecall = function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+        if self == BallService.RF.Interact and method == "InvokeServer" then
+            local data = args[1]
+            if type(data) == "table" and data.Move == "Spike" and JinkoCurve.enabled then
+                data.Charge = JinkoCurve.config.Charge
+                data.SpecialCharge = JinkoCurve.config.SpecialCharge
+                data.TiltDirection = JinkoCurve.config.TiltDirection
+            end
+            return JinkoCurve.namecallOld(self, data)
+        end
+        return JinkoCurve.namecallOld(self, ...)
+    end
+    setreadonly(mt, true)
+    JinkoCurve.hooked = true
+end
+
+JinkoCurve.stop = function()
+    if JinkoCurve.connection then JinkoCurve.connection:Disconnect() JinkoCurve.connection = nil end
+end
+
+local FFlags = { lastCount = 0 }
+FFlags.cleanName = function(name)
+    return name:gsub("^DFInt", ""):gsub("^DFFlag", ""):gsub("^FFFlag", ""):gsub("^FFlag", ""):gsub("^FInt", ""):gsub("^FString", ""):gsub("^FLog", "")
+end
+
+FFlags.apply = function(jsonString)
+    if type(setfflag) ~= "function" then
+        Parasite:Notify({ Title = "FFlags", Content = "setfflag unsupported", Type = "Error" })
+        return 0
+    end
+    local flags = game:GetService("HttpService"):JSONDecode(jsonString)
+    if type(flags) ~= "table" then
+        Parasite:Notify({ Title = "FFlags", Content = "Invalid JSON", Type = "Error" })
+        return 0
+    end
+    local count, index = 0, 0
+    for name, value in pairs(flags) do
+        index = index + 1
+        if index % 15 == 0 then task.wait() end
+        local cleaned = FFlags.cleanName(name)
+        local current = nil
+        if type(getfflag) == "function" then current = getfflag(cleaned) end
+        if current ~= nil or type(getfflag) ~= "function" then
+            setfflag(cleaned, tostring(value))
+            count = count + 1
+        end
+    end
+    Parasite:Notify({ Title = "FFlags", Content = "Applied " .. count .. " flag(s)", Type = "Success" })
+    return count
+end
+
+local Hush = {
+    active = false, links = {}, damped = {}, paused = {},
+    loud = {
+        [Enum.AnimationPriority.Action] = true,
+        [Enum.AnimationPriority.Action2] = true,
+        [Enum.AnimationPriority.Action3] = true,
+        [Enum.AnimationPriority.Action4] = true,
+    },
+}
+
+Hush.gag = function(signal)
+    if type(getconnections) ~= "function" then return end
+    local cons = getconnections(signal)
+    if type(cons) ~= "table" then return end
+    for _, con in ipairs(cons) do
+        if con.Enabled ~= false then
+            con:Disable()
+            Hush.paused[#Hush.paused + 1] = con
+        end
+    end
+end
+
+Hush.quiet = function(inst)
+    if not inst:IsA("Sound") then return end
+    Hush.damped[#Hush.damped + 1] = { inst = inst, level = inst.Volume }
+    inst.Volume = 0
+    inst:Stop()
+end
+
+Hush.start = function()
+    if Hush.active then return end
+    Hush.active = true
+    Hush.gag(EffectsRemote.OnClientEvent)
+    Hush.gag(GameEffectRemote.OnClientEvent)
+    Hush.animUntil = os.clock() + 0.2
+    local character = LocalPlayer.Character
+    local animator = character and character:FindFirstChildWhichIsA("Animator", true)
+    if animator then
+        for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+            if Hush.loud[track.Priority] then track:Stop(0) end
+        end
+        Hush.links[#Hush.links + 1] = animator.AnimationPlayed:Connect(function(track)
+            if not Hush.active or os.clock() > Hush.animUntil then return end
+            if Hush.loud[track.Priority] then track:Stop(0) end
+        end)
+    end
+    for _, root in ipairs({ Workspace, game:GetService("SoundService"), character }) do
+        if root then
+            Hush.links[#Hush.links + 1] = root.DescendantAdded:Connect(function(inst)
+                if Hush.active then Hush.quiet(inst) end
+            end)
+        end
+    end
+end
+
+Hush.stop = function()
+    if not Hush.active then return end
+    Hush.active = false
+    for _, link in ipairs(Hush.links) do link:Disconnect() end
+    Hush.links = {}
+    for _, con in ipairs(Hush.paused) do con:Enable() end
+    Hush.paused = {}
+    for _, record in ipairs(Hush.damped) do
+        if record.inst.Parent then record.inst.Volume = record.level end
+    end
+    Hush.damped = {}
+end
+
+local AutoCorner = { enabled = false, side = "Auto", reach = "All", aimed = false, steer = nil, drift = Vector3.zero }
+
+AutoCorner.physics = function()
+    local reached, module = pcall(require, ReplicatedStorage.Common.Physics)
+    return reached and module or nil
+end
+
+AutoCorner.bounds = function()
+    local physics = AutoCorner.physics()
+    if physics and physics._getCourtlines then
+        local found, lines = pcall(physics._getCourtlines)
+        if found and lines and lines:IsA("BasePart") then
+            return lines.Position, lines.Size * 0.5, lines.Position.Y
+        end
+    end
+    local map = Workspace:FindFirstChild("Map")
+    local court = map and map:FindFirstChild("Court")
+    if court then
+        return court.Position, court.Size * 0.5 - Vector3.new(1, 0, 1), court.Position.Y + court.Size.Y * 0.5
+    end
+    return nil
+end
+
+AutoCorner.trackBall = function(ball, before, elapsed)
+    if elapsed <= 0 then return end
+    local drift = ball.Position - before
+    AutoCorner.drift = drift / elapsed
+end
+
+AutoCorner.origin = function()
+    local ball = getNearestBall()
+    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not ball then
+        return root and root.Position or Vector3.zero
+    end
+    local drift = AutoCorner.drift
+    if not root or typeof(drift) ~= "Vector3" or drift.Magnitude < 1 then
+        return ball.Position
+    end
+    local gap = ball.Position - root.Position
+    local closing = drift - root.AssemblyLinearVelocity
+    local speed = closing:Dot(closing)
+    if speed < 1 then
+        return ball.Position
+    end
+    local reach = math.clamp(-gap:Dot(closing) / speed, 0, 0.45)
+    return ball.Position + drift * reach
+end
+
+AutoCorner.cornerPoint = function()
+    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local centre, half, surfaceY = AutoCorner.bounds()
+    if not root or not centre then return nil end
+
+    local halfX = math.max(half.X - 2, 1)
+    local halfZ = math.max(half.Z - 2, 1)
+
+    local map = Workspace:FindFirstChild("Map")
+    local collide = map and map:FindFirstChild("BallCollideOnly")
+    local net = collide and collide:FindFirstChild("Net")
+    local netZ = net and net.Position.Z or centre.Z
+
+    local index = LocalPlayer.Team and LocalPlayer.Team:GetAttribute("Index")
+    local sign
+    if index == 1 then sign = 1
+    elseif index == 2 then sign = -1
+    else sign = (root.Position.Z < netZ) and 1 or -1 end
+
+    local deepZ = centre.Z + sign * halfZ
+    local leftX = centre.X + sign * halfX
+    local rightX = centre.X - sign * halfX
+
+    local pivot = AutoCorner.origin()
+    local attackLine = half.Z / 3
+    local standoff = math.abs(root.Position.Z - netZ)
+    local hugging = 1 - math.clamp(standoff / attackLine, 0, 1)
+    AutoCorner.lean = hugging
+
+    local shortZ = centre.Z + sign * halfZ * 0.3
+    local reach = AutoCorner.reach
+    local wantsNear = reach == "Nearest" or (reach ~= "Back" and hugging > 0)
+
+    local side = AutoCorner.side
+    if side == "Left" then
+        return Vector3.new(leftX, surfaceY, wantsNear and shortZ or deepZ)
+    elseif side == "Right" then
+        return Vector3.new(rightX, surfaceY, wantsNear and shortZ or deepZ)
+    end
+
+    local corners = {}
+    if reach ~= "Nearest" then
+        corners[#corners + 1] = { at = Vector3.new(leftX, surfaceY, deepZ), reward = 0 }
+        corners[#corners + 1] = { at = Vector3.new(rightX, surfaceY, deepZ), reward = 0 }
+    end
+    if wantsNear then
+        corners[#corners + 1] = { at = Vector3.new(leftX, surfaceY, shortZ), reward = 0.45 * hugging }
+        corners[#corners + 1] = { at = Vector3.new(rightX, surfaceY, shortZ), reward = 0.45 * hugging }
+    end
+
+    local eye = Workspace.CurrentCamera or Camera
+    local heading = eye and eye.CFrame.LookVector or root.CFrame.LookVector
+    heading = Vector3.new(heading.X, 0, heading.Z)
+    if heading.Magnitude < 0.01 then return corners[1].at end
+    heading = heading.Unit
+
+    local physics = AutoCorner.physics()
+    local bounds = physics and physics._getCourtlines and physics._getCourtlines()
+
+    local guards = {}
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and (not LocalPlayer.Team or player.Team ~= LocalPlayer.Team) then
+            local guardRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+            if guardRoot then
+                guards[#guards + 1] = Vector3.new(guardRoot.Position.X, surfaceY, guardRoot.Position.Z)
+            end
+        end
+    end
+
+    local aligned = {}
+    for _, corner in ipairs(corners) do
+        local legal = true
+        if bounds and physics.isPositionInCourt then
+            local ok, inside = pcall(physics.isPositionInCourt, corner.at, bounds, 0, nil)
+            legal = not ok or inside
+        end
+        if legal then
+            local line = Vector3.new(corner.at.X - pivot.X, 0, corner.at.Z - pivot.Z)
+            if line.Magnitude > 0.01 then
+                local dot = line.Unit:Dot(heading)
+                aligned[#aligned + 1] = { spot = corner.at, dot = dot, reward = corner.reward }
+            end
+        end
+    end
+    if #aligned == 0 then return corners[1].at end
+
+    local pick
+    for _, entry in ipairs(aligned) do
+        if not pick or entry.dot > pick.dot then pick = entry end
+    end
+    local wanted = pick.spot.X >= centre.X
+
+    local best, bestScore
+    for _, entry in ipairs(aligned) do
+        if (entry.spot.X >= centre.X) == wanted then
+            local nearest = 60
+            for _, guard in ipairs(guards) do
+                local gap = (guard - entry.spot).Magnitude
+                if gap < nearest then nearest = gap end
+            end
+            local score = math.min(nearest, 45) / 45 + entry.reward
+            if not bestScore or score > bestScore then
+                bestScore = score
+                best = entry.spot
+            end
+        end
+    end
+    return best or pick.spot
+end
+
+AutoCorner.facing = function()
+    local spot = AutoCorner.cornerPoint()
+    if not spot then return nil end
+    local pivot = AutoCorner.origin()
+    local flat = Vector3.new(spot.X - pivot.X, 0, spot.Z - pivot.Z)
+
+    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if root then
+        local map = Workspace:FindFirstChild("Map")
+        local collide = map and map:FindFirstChild("BallCollideOnly")
+        local net = collide and collide:FindFirstChild("Net")
+        local netZ = net and net.Position.Z
+        if netZ then
+            local ownSide = (root.Position.Z > netZ) and 1 or -1
+            if flat.Z * ownSide >= 0 then
+                flat = Vector3.new(spot.X - root.Position.X, 0, spot.Z - root.Position.Z)
+            end
+            if flat.Z * ownSide >= 0 then
+                flat = Vector3.new(flat.X, 0, -ownSide * math.max(math.abs(flat.Z), 1))
+            end
+        end
+    end
+
+    if flat.Magnitude < 0.01 then return nil end
+    return flat.Unit
+end
+
+AutoCorner.installAim = function()
+    if AutoCorner.aimed then return end
+    if not (getrawmetatable and setreadonly and getnamecallmethod) then return end
+    local mt = getrawmetatable(game)
+    local oldNamecall = mt.__namecall
+    setreadonly(mt, false)
+    mt.__namecall = function(self, ...)
+        local method = getnamecallmethod()
+        if self == BallService.RF.Interact and method == "InvokeServer" then
+            local data = (...)
+            if AutoCorner.enabled and type(data) == "table" and (data.Move == "Spike" or data.Move == "ServeSpike") then
+                local steer = AutoCorner.steer
+                if typeof(steer) == "Vector3" then
+                    local flat = Vector3.new(steer.X, 0, steer.Z)
+                    if flat.Magnitude > 0.01 then
+                        flat = flat.Unit
+                        local aim = (flat - Vector3.new(0, 0.35, 0)).Unit
+                        data.LookVector = aim
+                        data.Direction = aim
+                    end
+                end
+            end
+            return oldNamecall(self, data)
+        end
+        return oldNamecall(self, ...)
+    end
+    setreadonly(mt, true)
+    AutoCorner.aimed = true
+end
+
+local function doFakeSpike()
+    if not fakeSpikeEnabled then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    if _AC and _AC.PlayAnimation then
+        hum.Jump = true
+        _AC:PlayAnimation("SpikeJump")
+        task.delay(0.28, function()
+            _AC:PlayAnimation("Spike")
+        end)
+    end
+end
+
+UserInputService.JumpRequest:Connect(function()
+    if fakeSpikeEnabled then
+        doFakeSpike()
+    end
+end)
+
+local function setupCharacter(character)
+    local humanoid = character:WaitForChild("Humanoid")
+    local rootPart = character:WaitForChild("HumanoidRootPart")
+    if shiftLockConnection then shiftLockConnection:Disconnect() shiftLockConnection = nil end
+    shiftLockConnection = humanoid:GetPropertyChangedSignal("Jump"):Connect(function()
+        if humanoid.Jump and (autoShiftLockEnabled or AutoCorner.enabled) then
+            task.defer(function()
+                local tracked = AutoCorner.enabled and getNearestBall()
+                local before = tracked and tracked.Position
+                local stamp = os.clock()
+                task.wait(0.03)
+                if tracked and before and tracked.Parent then
+                    AutoCorner.trackBall(tracked, before, os.clock() - stamp)
+                end
+                local lookVector = AutoCorner.enabled and AutoCorner.facing()
+                if not lookVector and autoShiftLockEnabled then
+                    lookVector = Vector3.new(Camera.CFrame.LookVector.X, 0, Camera.CFrame.LookVector.Z)
+                end
+                if lookVector and lookVector.Magnitude > 0 then
+                    AutoCorner.steer = lookVector
+                    if autoShiftLockEnabled or AutoCorner.enabled then
+                        rootPart.CFrame = CFrame.lookAt(rootPart.Position, rootPart.Position + lookVector.Unit)
+                        humanoid.AutoRotate = false
+                    end
+                end
+            end)
+        else
+            humanoid.AutoRotate = false
+        end
+    end)
+end
+
+if LocalPlayer.Character then setupCharacter(LocalPlayer.Character) end
+LocalPlayer.CharacterAdded:Connect(setupCharacter)
+
+local Silent = { steer = nil, expiry = 0, hooked = false }
+
+Silent.install = function()
+    if Silent.hooked then return end
+    if not (getrawmetatable and setreadonly and getnamecallmethod) then return end
+    local mt = getrawmetatable(game)
+    local oldNamecall = mt.__namecall
+    setreadonly(mt, false)
+    mt.__namecall = function(self, ...)
+        local method = getnamecallmethod()
+        if self == BallService.RF.Interact and method == "InvokeServer" then
+            local data = (...)
+            local steer = Silent.steer
+            if type(data) == "table" and typeof(steer) == "Vector3" and os.clock() < Silent.expiry then
+                if data.Move == "Spike" or data.Move == "ServeSpike" then
+                    data.LookVector = steer
+                    data.Direction = steer
+                    local ground = Vector3.new(steer.X, 0, steer.Z)
+                    if typeof(data.TiltDirection) == "Vector3" and ground.Magnitude > 0.01 then
+                        local power = Vector3.new(data.TiltDirection.X, 0, data.TiltDirection.Z).Magnitude
+                        if power > 0.05 then
+                            local lean = ground.Unit * power
+                            data.TiltDirection = Vector3.new(lean.X, data.TiltDirection.Y, lean.Z)
+                        end
+                    end
+                end
+            end
+            return oldNamecall(self, data)
+        end
+        return oldNamecall(self, ...)
+    end
+    setreadonly(mt, true)
+    Silent.hooked = true
+end
+
+local function enemyAim()
+    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not root then return nil end
+    local centre, half, surfaceY = nil, nil, nil
+    local physics = nil
+    physics = require(ReplicatedStorage.Common.Physics)
+    if physics and physics._getCourtlines then
+        local found, lines = pcall(physics._getCourtlines)
+        if found and lines and lines:IsA("BasePart") then
+            centre, half, surfaceY = lines.Position, lines.Size * 0.5, lines.Position.Y
+        end
+    end
+    if not centre then
+        local map = Workspace:FindFirstChild("Map")
+        local court = map and map:FindFirstChild("Court")
+        if court then centre, half, surfaceY = court.Position, court.Size * 0.5, court.Position.Y end
+    end
+    if not centre then return nil end
+
+    local map = Workspace:FindFirstChild("Map")
+    local collide = map and map:FindFirstChild("BallCollideOnly")
+    local net = collide and collide:FindFirstChild("Net")
+    local netZ = net and net.Position.Z or centre.Z
+    local netTop = net and (net.Position.Y + net.Size.Y * 0.5) or surfaceY
+
+    local index = LocalPlayer.Team and LocalPlayer.Team:GetAttribute("Index")
+    local sign
+    if index == 1 then sign = 1 elseif index == 2 then sign = -1 else sign = (root.Position.Z < netZ) and 1 or -1 end
+
+    local ball = getNearestBall()
+    local origin = ball and ball.Position or (root.Position + Vector3.new(0, 6, 0))
+    local headroom = origin.Y - netTop
+    local standoff = math.max(math.abs(netZ - origin.Z), 2)
+    local drop = math.clamp(0.45 * headroom / standoff, -0.05, 0.30)
+
+    local halfZ = math.max(half.Z - 2, 1)
+    local target = Vector3.new(centre.X + (origin.X - centre.X) * 0.25, surfaceY, centre.Z + sign * halfZ * 0.55)
+    local flat = Vector3.new(target.X - origin.X, 0, target.Z - origin.Z)
+    if flat.Magnitude < 0.01 then return nil end
+    return (flat.Unit - Vector3.new(0, drop, 0)).Unit
+end
+
+local function fireNewSpike()
+    if not newSilentSpikeEnabled or not firesignal then return end
+    local newRemote = ReplicatedStorage.Packages._Index["sleitnick_knit@1.7.0"].knit.Services.BallService.RE.DoMove
+    Hush.start()
+    local hadHitbox = hitboxEnabled
+    hitboxEnabled = true
+    Hitbox.setSize(300.0)
+    local dir = enemyAim() or Camera.CFrame.LookVector
+    Silent.steer = dir
+    Silent.expiry = os.clock() + 0.8
+    Silent.install()
+    firesignal(newRemote.OnClientEvent, "Spike", false, false, dir)
+    task.spawn(function()
+        task.wait(0.3)
+        hitboxEnabled = hadHitbox
+        if hadHitbox then Hitbox.setSize(hitboxScale) else Hitbox.disable() end
+        Hush.stop()
+    end)
+end
+
+local function stopBall()
+    if not BallService then return end
+    local ballId = getBallId()
+    if not ballId then return end
+    BallService.RF.Interact:InvokeServer({
+        ["Charge"] = 1, ["Move"] = "Block", ["SpecialCharge"] = 0,
+        ["TiltDirection"] = Vector3.new(-0.126, 1, 0.992),
+        ["LookVector"] = Vector3.new(0, -1, 0),
+        ["MoveDirection"] = Vector3.new(0, 0, 0),
+        ["ClientCanRunSpecial"] = false, ["From"] = "Client",
+        ["BallId"] = ballId, ["Timestamp"] = tick(), ["CustomClient"] = {},
+    })
+end
+
+local function aim()
+    if not BallService then return end
+    local ballId = getBallId()
+    if not ballId then return end
+    local nearest = nil
+    local shortest = math.huge
+    local playerRoot = getHRP()
+    if not playerRoot then return end
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Team == LocalPlayer.Team then
+            local c = player.Character
+            if c then
+                local r = c:FindFirstChild("HumanoidRootPart")
+                if r then
+                    local d = (r.Position - playerRoot.Position).Magnitude
+                    if d < shortest then shortest = d nearest = r end
+                end
+            end
+        end
+    end
+    if not nearest then return end
+    local direction = (nearest.Position - playerRoot.Position).Unit
+    local tiltDir = Vector3.new(direction.X, 1, direction.Z)
+    local lookVec = Vector3.new(direction.X, 0, direction.Z)
+    if lookVec.Magnitude > 0 then lookVec = lookVec.Unit else lookVec = Vector3.new(0.175, 0, -0.984) end
+    BallService.RF.Interact:InvokeServer({
+        ["Charge"] = 1, ["Move"] = "JumpSet", ["SpecialCharge"] = 0.9999996364706223,
+        ["TiltDirection"] = tiltDir, ["LookVector"] = lookVec,
+        ["MoveDirection"] = Vector3.new(0, 0, 0), ["ClientCanRunSpecial"] = false,
+        ["From"] = "Client", ["Timestamp"] = tick(), ["BallId"] = ballId, ["CustomClient"] = {},
+    })
+end
+
+local function akariDash()
+    if not akariDashEnabled then return end
+    local character = LocalPlayer.Character
+    if not character then return end
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    local direction, distance = nil, 10
+    local ball = getNearestBall()
+    if ball then
+        local flat = Vector3.new(ball.Position.X - hrp.Position.X, 0, ball.Position.Z - hrp.Position.Z)
+        if flat.Magnitude > 0.01 then
+            direction = flat.Unit
+            distance = math.clamp(flat.Magnitude - 1, 0, 16)
+        end
+    end
+    if not direction then
+        local fwd = Camera.CFrame.LookVector
+        direction = Vector3.new(fwd.X, 0, fwd.Z).Unit
+    end
+    local restore = getthreadidentity and getthreadidentity()
+    if setthreadidentity then setthreadidentity(2) end
+    local Effect = require(ReplicatedStorage.Content.Effect)
+    Effect:Play("KuraiDashFX")({ Player = LocalPlayer, Direction = direction })
+    if setthreadidentity and restore then setthreadidentity(restore) end
+    local tween = TweenService:Create(hrp, TweenInfo.new(0.2, Enum.EasingStyle.Linear), {
+        CFrame = CFrame.new(hrp.Position + (direction * distance)) * CFrame.Angles(0, math.rad(hrp.Orientation.Y), 0)
+    })
+    tween:Play()
+end
+
+local function leadFeetSlam()
+    if not leadFeetEnabled then return end
+    local character = LocalPlayer.Character
+    if not character or not character.PrimaryPart then return end
+    local root = character.PrimaryPart
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid or humanoid.Health <= 0 then return end
+    local tuning = { Acceleration = -10000, TerminalVelocity = -300, Duration = 2 }
+    local controller = nil
+    local restore = getthreadidentity and getthreadidentity()
+    if setthreadidentity then setthreadidentity(2) end
+    local ability = require(ReplicatedStorage.Content.Ability.LeadFeet)
+    if type(ability) == "table" and type(ability.Metadata) == "table" then tuning = ability.Metadata end
+    controller = require(ReplicatedStorage.Packages.Knit).GetController("GameController")
+    if controller then controller.IsBusy:set(false) end
+    require(ReplicatedStorage.Content.Effect):Play("LeadFeetFX")({ Player = LocalPlayer })
+    require(game:GetService("ReplicatedFirst").Controllers.GameController.Actions.Move.Jump).stop()
+    if controller then controller.IsBusy:set(true) end
+    if setthreadidentity and restore then setthreadidentity(restore) end
+    if leadFeetLink then leadFeetLink:Disconnect() leadFeetLink = nil end
+    local expiry = os.clock() + (tuning.Duration or 2)
+    leadFeetLink = RunService.Heartbeat:Connect(function(delta)
+        if not root.Parent or humanoid.FloorMaterial ~= Enum.Material.Air or os.clock() >= expiry then
+            if controller then controller.IsBusy:set(false) end
+            if leadFeetLink then leadFeetLink:Disconnect() leadFeetLink = nil end
+            return
+        end
+        local velocity = root.AssemblyLinearVelocity
+        local drop = math.max(velocity.Y + (tuning.Acceleration or -10000) * delta, tuning.TerminalVelocity or -300)
+        root.AssemblyLinearVelocity = Vector3.new(velocity.X, drop, velocity.Z)
+    end)
+end
+
+local function loadJerseys()
+    jerseyList = {}
+    local itemModule = require(ReplicatedStorage.Content.Item)
+    local entities = ReplicatedStorage.Content.Item:FindFirstChild("Entities")
+    if entities and itemModule and itemModule.Type then
+        for _, child in ipairs(entities:GetChildren()) do
+            if child:IsA("ModuleScript") then
+                local item = require(child)
+                if item and type(item) == "table" and item.Type == itemModule.Type.Jersey then
+                    table.insert(jerseyList, tostring(item.Id or child.Name))
+                end
+            end
+        end
+    end
+    if #jerseyList == 0 then
+        local assets = ReplicatedStorage.Assets and ReplicatedStorage.Assets:FindFirstChild("Jersey")
+        if assets then
+            for _, child in ipairs(assets:GetChildren()) do table.insert(jerseyList, child.Name) end
+        end
+    end
+    table.sort(jerseyList)
+end
+
+loadJerseys()
+
+local function applyJersey(id)
+    local character = LocalPlayer.Character
+    if not character or not character:FindFirstChild("UpperTorso") then return false end
+    local jerseyFolder = ReplicatedStorage:FindFirstChild("Assets")
+    jerseyFolder = jerseyFolder and jerseyFolder:FindFirstChild("Jersey")
+    if not jerseyFolder then return false end
+    if not seen.__jerseyHook then
+        seen.__jerseyHook = LocalPlayer.CharacterAdded:Connect(function(character2)
+            pickedTeam = nil
+            if character2:WaitForChild("UpperTorso", 10) and autoApplyJersey then
+                task.wait(1)
+                applyJersey(selectedJersey)
+            end
+        end)
+    end
+    local function clearWorn()
+        for _, child in ipairs(character:GetChildren()) do
+            if child.Name == "JerseyFront" or child.Name == "JerseyBack" or child.Name == "_jerseyInstances"
+                or child:IsA("Clothing") or child:IsA("ShirtGraphic") then child:Destroy() end
+        end
+    end
+    if not autoApplyJersey then
+        local backup = originals[character]
+        if backup then
+            clearWorn()
+            for _, saved in ipairs(backup) do
+                local restored = saved:Clone()
+                if restored:IsA("SurfaceGui") then restored.Adornee = character:FindFirstChild("UpperTorso") end
+                restored.Parent = character
+            end
+            originals[character] = nil
+        end
+        pickedTeam = nil
+        return true
+    end
+    if not originals[character] then
+        local backup = {}
+        for _, child in ipairs(character:GetChildren()) do
+            if child.Name == "JerseyFront" or child.Name == "JerseyBack" or child:IsA("Clothing") or child:IsA("ShirtGraphic") then
+                table.insert(backup, child:Clone())
+            end
+        end
+        originals[character] = backup
+    end
+    local function resolveTeam()
+        local worn = character:FindFirstChildOfClass("Shirt")
+        if not worn then return nil end
+        for _, asset in ipairs(jerseyFolder:GetChildren()) do
+            for _, team in ipairs(asset:GetChildren()) do
+                local shirt = team:FindFirstChild("Shirt")
+                if shirt and shirt:IsA("Shirt") and shirt.ShirtTemplate == worn.ShirtTemplate then
+                    return team.Name
+                end
+            end
+        end
+        return nil
+    end
+    local Jersey = require(ReplicatedStorage.Tools.Jersey)
+    if type(Jersey) ~= "table" or not Jersey.set then return false end
+    pickedTeam = pickedTeam or resolveTeam()
+    Jersey.set({
+        Player = LocalPlayer, Character = character,
+        Id = id or selectedJersey, TeamName = pickedTeam,
+    })
+    pickedTeam = pickedTeam or resolveTeam()
+    return true
+end
+
+local function sweep()
+    local ballFolder = ReplicatedStorage:FindFirstChild("Assets")
+    ballFolder = ballFolder and ballFolder:FindFirstChild("Ball")
+    if not ballFolder then return end
+    local function strip(model)
+        local holder = clones[model]
+        if holder then holder:Destroy() clones[model] = nil end
+        local saved = originals[model]
+        if saved then
+            for piece, record in pairs(saved) do
+                if piece.Parent then piece[record.field] = record.value end
+            end
+            originals[model] = nil
+        end
+    end
+    local function skin(model)
+        local driver = model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")
+        local source = ballFolder:FindFirstChild(selectedBallSkin)
+        if not driver or not source then return end
+        strip(model)
+        local saved = {}
+        local function stash(piece, field, value)
+            saved[piece] = { field = field, value = piece[field] }
+            piece[field] = value
+        end
+        for _, piece in ipairs(model:GetDescendants()) do
+            if piece:IsA("BasePart") then
+                if piece.Name ~= MARK then stash(piece, "Transparency", 1) end
+            elseif piece:IsA("Decal") or piece:IsA("Texture") then
+                stash(piece, "Transparency", 1)
+            elseif piece:IsA("Trail") or piece:IsA("ParticleEmitter") or piece:IsA("Beam") or piece:IsA("Light") or piece:IsA("Smoke") or piece:IsA("Fire") or piece:IsA("Sparkles") then
+                stash(piece, "Enabled", false)
+            end
+        end
+        originals[model] = saved
+        local holder = source:Clone()
+        holder.Name = MARK2
+        holder.Parent = model
+        local pieces = {}
+        if holder:IsA("BasePart") then pieces[#pieces + 1] = holder end
+        for _, candidate in ipairs(holder:GetDescendants()) do
+            if candidate:IsA("BasePart") then pieces[#pieces + 1] = candidate end
+        end
+        local anchor = holder:IsA("Model") and holder.PrimaryPart or nil
+        if not anchor then
+            local bestScore
+            for _, candidate in ipairs(pieces) do
+                if candidate:IsA("BasePart") then
+                    local vol = candidate.Size.X * candidate.Size.Y * candidate.Size.Z
+                    local roundish = math.abs(candidate.Size.X - candidate.Size.Y) < 0.5 and math.abs(candidate.Size.Y - candidate.Size.Z) < 0.5
+                    local score = vol
+                    if candidate:IsA("Part") and candidate.Shape == Enum.PartType.Ball then score = score * 6
+                    elseif roundish then score = score * 3 end
+                    if not bestScore or score > bestScore then bestScore = score anchor = candidate end
+                end
+            end
+        end
+        if anchor then
+            local offset = holder:GetPivot():ToObjectSpace(anchor.CFrame)
+            holder:PivotTo(driver.CFrame * offset:Inverse())
+        else
+            holder:PivotTo(driver.CFrame)
+        end
+        for _, part in ipairs(pieces) do
+            part.Anchored = false
+            part.CanCollide = false
+            part.CanQuery = false
+            part.CanTouch = false
+            part.Massless = true
+            local weld = Instance.new("WeldConstraint")
+            weld.Part0 = driver
+            weld.Part1 = part
+            weld.Parent = part
+        end
+        clones[model] = holder
+    end
+    local tracked = {}
+    for model in pairs(clones) do table.insert(tracked, model) end
+    for _, model in ipairs(tracked) do strip(model) end
+    if not autoApplyBallSkin then return end
+    for _, model in ipairs(Workspace:GetChildren()) do
+        if model:IsA("Model") and model.Name:match("^CLIENT_BALL_") then skin(model) end
+    end
+    if not seen.__ballHook then
+        seen.__ballHook = Workspace.ChildAdded:Connect(function(child)
+            if not autoApplyBallSkin or not child:IsA("Model") or not child.Name:match("^CLIENT_BALL_") then return end
+            task.spawn(function()
+                for _ = 1, 40 do
+                    if child.PrimaryPart or child:FindFirstChildWhichIsA("BasePart") then break end
+                    task.wait(0.05)
+                end
+                if autoApplyBallSkin and child.Parent then sweep() end
+            end)
+        end)
+    end
+end
+
+local function loadEffects()
+    effectList = {}
+    local effectFolder = ReplicatedStorage.Assets:FindFirstChild("ScoreEffect")
+    if effectFolder then
+        for _, child in ipairs(effectFolder:GetChildren()) do
+            if child:IsA("ModuleScript") then table.insert(effectList, child.Name) end
+        end
+    end
+    table.sort(effectList)
+    if #effectList == 0 then
+        table.insert(effectList, "SupernovaScoreEffect")
+        table.insert(effectList, "GroundHit1")
+        table.insert(effectList, "GroundHit2")
+    end
+end
+
+local function loadCards()
+    cardList = {}
+    local ItemEntities = ReplicatedStorage.Content.Item.Entities
+    if ItemEntities then
+        for _, child in ipairs(ItemEntities:GetChildren()) do
+            if child:IsA("ModuleScript") then
+                local name = child.Name
+                if string.match(name, "Card") or string.match(name, "PlayerCard") then table.insert(cardList, name) end
+            end
+        end
+    end
+    table.sort(cardList)
+    if #cardList == 0 then table.insert(cardList, "UltimateChampionPlayerCard") end
+end
+
+local function loadBallSkins()
+    ballSkinList = {}
+    local ASSETS = ReplicatedStorage:FindFirstChild("Assets")
+    local BALL_FOLDER = ASSETS and ASSETS:FindFirstChild("Ball")
+    if BALL_FOLDER then
+        for _, child in ipairs(BALL_FOLDER:GetChildren()) do
+            if child:IsA("Model") then table.insert(ballSkinList, child.Name) end
+        end
+    end
+    table.sort(ballSkinList)
+    if #ballSkinList == 0 then table.insert(ballSkinList, "ClassicBall") end
+end
+
+loadEffects()
+loadCards()
+loadBallSkins()
+
+local function enableRedirectSpike()
+    redirectSpikeEnabled = true
+    if redirectSpikeInstalled then return end
+    if not (getrawmetatable and setreadonly and getnamecallmethod) then return end
+    local mt = getrawmetatable(game)
+    local oldNamecall = mt.__namecall
+    setreadonly(mt, false)
+    mt.__namecall = function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+        if self == BallService.RF.Interact and method == "InvokeServer" then
+            local data = args[1]
+            if type(data) == "table" and data.Move == "Spike" and redirectSpikeEnabled then
+                local dir = Camera.CFrame.LookVector
+                data.LookVector = dir
+                data.Direction = dir
+                if data.MoveDirection then data.MoveDirection = dir end
+            end
+            return oldNamecall(self, data)
+        end
+        return oldNamecall(self, ...)
+    end
+    setreadonly(mt, true)
+    redirectSpikeInstalled = true
+end
+
+local function disableRedirectSpike() redirectSpikeEnabled = false end
+
+local function enableSanjuTilt()
+    sanjuTiltEnabled = true
+    if sanjuTiltInstalled then return end
+    if not (getrawmetatable and setreadonly and getnamecallmethod) then return end
+    local mt = getrawmetatable(game)
+    local oldNamecall = mt.__namecall
+    setreadonly(mt, false)
+    mt.__namecall = function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+        if self == BallService.RF.Interact and method == "InvokeServer" then
+            local data = args[1]
+            if type(data) == "table" and data.Move == "Spike" and sanjuTiltEnabled then
+                if data.TiltDirection and data.LookVector then
+                    local tiltDir = data.TiltDirection
+                    if math.abs(tiltDir.X) > 0.01 or math.abs(tiltDir.Z) > 0.01 then
+                        local lookVec = data.LookVector
+                        local bend = Vector3.new(tiltDir.X, 0, tiltDir.Z)
+                        data.LookVector = Vector3.new(lookVec.X + bend.X * 0.3, lookVec.Y, lookVec.Z + bend.Z * 0.3).Unit
+                        data.TiltDirection = Vector3.new(tiltDir.X * 1.35, tiltDir.Y, tiltDir.Z * 1.35)
+                    end
+                end
+            end
+            return oldNamecall(self, data)
+        end
+        return oldNamecall(self, ...)
+    end
+    setreadonly(mt, true)
+    sanjuTiltInstalled = true
+end
+
+local function disableSanjuTilt() sanjuTiltEnabled = false end
+
+local function enableMaxCharge()
+    maxChargeEnabled = true
+    if maxChargeHookActive then return end
+    if not (getrawmetatable and setreadonly and getnamecallmethod) then return end
+    mtMaxCharge = getrawmetatable(game)
+    oldNamecallMaxCharge = mtMaxCharge.__namecall
+    setreadonly(mtMaxCharge, false)
+    mtMaxCharge.__namecall = function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+        if self == BallService.RF.Interact and method == "InvokeServer" then
+            local data = args[1]
+            if type(data) == "table" and data.Move == "Spike" and maxChargeEnabled then
+                data.Charge = 1.0
+                data.SpecialCharge = 1.0
+                data.HoldDuration = 1.0
+                if type(data.CustomClient) == "table" then
+                    data.CustomClient.HoldDuration = 1.0
+                    data.CustomClient.Charge = 1.0
+                    data.CustomClient.SpecialCharge = 1.0
+                else
+                    data.CustomClient = { HoldDuration = 1.0, Charge = 1.0, SpecialCharge = 1.0 }
+                end
+            end
+            return oldNamecallMaxCharge(self, unpack(args))
+        end
+        return oldNamecallMaxCharge(self, ...)
+    end
+    setreadonly(mtMaxCharge, true)
+    maxChargeHookActive = true
+end
+
+local function disableMaxCharge() maxChargeEnabled = false end
+
+local function enableMaxServe()
+    maxServeEnabled = true
+    if maxServeHookActive then return end
+    if not (getrawmetatable and setreadonly and getnamecallmethod) then return end
+    mtMaxServe = getrawmetatable(game)
+    oldNamecallMaxServe = mtMaxServe.__namecall
+    setreadonly(mtMaxServe, false)
+    mtMaxServe.__namecall = function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+        if self == Serve and method == "InvokeServer" and maxServeEnabled then
+            args[2] = 5
+            return oldNamecallMaxServe(self, unpack(args))
+        end
+        return oldNamecallMaxServe(self, ...)
+    end
+    setreadonly(mtMaxServe, true)
+    maxServeHookActive = true
+end
+
+local function disableMaxServe() maxServeEnabled = false end
+
+local function enableDesync()
+    if desyncConnection then return end
+    desyncConnection = UserInputService.JumpRequest:Connect(function()
+        if desyncEnabled then
+            task.wait(0.03)
+            if firesignal then firesignal(doMove.OnClientEvent, "Spike", false, false) end
+        end
+    end)
+    desyncEnabled = true
+end
+
+local function disableDesync()
+    if desyncConnection then desyncConnection:Disconnect() desyncConnection = nil end
+    desyncEnabled = false
+end
+
+local function applyESP(player)
+    if not player.Character or espHighlights[player] then return end
+    local tone = Color3.fromRGB(255, 72, 72)
+    local highlight = Instance.new("Highlight")
+    highlight.Name = MARK
+    highlight.Adornee = player.Character
+    highlight.FillColor = tone
+    highlight.FillTransparency = 0.72
+    highlight.OutlineTransparency = 0
+    highlight.OutlineColor = tone
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Parent = player.Character
+    espHighlights[player] = highlight
+end
+
+local function removeESP(player)
+    if espHighlights[player] then espHighlights[player]:Destroy() espHighlights[player] = nil end
+end
+
+local function isEnemy(player)
+    if player == LocalPlayer then return false end
+    if not player.Team or not LocalPlayer.Team then return false end
+    return player.Team ~= LocalPlayer.Team
+end
+
+local function setupESP(player)
+    if player == LocalPlayer then return end
+    local function onCharacterAdded(character)
+        if espConnections[player] then
+            for _, c in pairs(espConnections[player]) do c:Disconnect() end
+            espConnections[player] = nil
+        end
+        removeESP(player)
+        local humanoid = character:WaitForChild("Humanoid", 3)
+        if not humanoid then return end
+        local stateConn = humanoid.StateChanged:Connect(function(_, newState)
+            if not espJumpEnabled or not isEnemy(player) then removeESP(player) return end
+            if newState == Enum.HumanoidStateType.Jumping or newState == Enum.HumanoidStateType.Freefall then
+                applyESP(player)
+            elseif newState == Enum.HumanoidStateType.Landed or newState == Enum.HumanoidStateType.Running then
+                removeESP(player)
+            end
+        end)
+        espConnections[player] = { stateConn }
+    end
+    if player.Character then onCharacterAdded(player.Character) end
+    player.CharacterAdded:Connect(onCharacterAdded)
+end
+
+for _, player in ipairs(Players:GetPlayers()) do setupESP(player) end
+Players.PlayerAdded:Connect(setupESP)
+
+local function getLineColor(index)
+    return lineColors[(index - 1) % #lineColors + 1]
+end
+
+local function createLineFor(player, index)
+    local att0 = Instance.new("Attachment")
+    att0.Name = MARK .. "_att0"
+    local att1 = Instance.new("Attachment")
+    att1.Name = MARK .. "_att1"
+    att1.Position = Vector3.new(0, 0, -1.5)
+    local hrp = getHRP()
+    if not hrp then return end
+    att0.Parent = hrp
+    local targetHead = player.Character and (player.Character:FindFirstChild("Head") or player.Character:FindFirstChild("HumanoidRootPart"))
+    if targetHead then
+        att1.Parent = targetHead
+    end
+    local beam = Instance.new("Beam")
+    beam.Name = MARK .. "_beam"
+    beam.Attachment0 = att0
+    beam.Attachment1 = att1
+    beam.Color = ColorSequence.new(getLineColor(index))
+    beam.Width0 = 0.08
+    beam.Width1 = 0.08
+    beam.FaceCamera = true
+    beam.Transparency = NumberSequence.new(0.2)
+    beam.Parent = att0
+    lines[player] = { att0 = att0, att1 = att1, beam = beam, head = targetHead }
+end
+
+local function removeLine(player)
+    local line = lines[player]
+    if line then
+        if line.att0 then line.att0:Destroy() end
+        if line.att1 then line.att1:Destroy() end
+        lines[player] = nil
+    end
+end
+
+local function updateLines()
+    if not linesEnabled then return end
+    local hrp = getHRP()
+    if not hrp then return end
+    for i, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            if not lines[player] then
+                createLineFor(player, i)
+            end
+        end
+    end
+    for player, line in pairs(lines) do
+        local char = player.Character
+        if not char then
+            removeLine(player)
+        else
+            local head = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
+            if not head then
+                removeLine(player)
+            else
+                if line.att1.Parent ~= head then
+                    line.att1.Parent = head
+                    line.head = head
+                end
+                line.beam.Enabled = true
+            end
+        end
+    end
+end
+
+RunService.RenderStepped:Connect(updateLines)
+
+local Landing = {
+    enabled = false, marker = nil, label = nil,
+    tracked = nil, last = nil, stamp = 0, drift = Vector3.zero,
+}
+
+Landing.clear = function()
+    if Landing.marker then
+        Landing.marker:Destroy()
+        Landing.marker = nil
+        Landing.label = nil
+    end
+    Landing.tracked = nil
+    Landing.last = nil
+    Landing.drift = Vector3.zero
+end
+
+Landing.build = function()
+    local disc = Instance.new("Part")
+    disc.Name = MARK .. "_landing"
+    disc.Shape = Enum.PartType.Cylinder
+    disc.Size = Vector3.new(0.2, 7, 7)
+    disc.Anchored = true
+    disc.CanCollide = false
+    disc.CanQuery = false
+    disc.CanTouch = false
+    disc.Material = Enum.Material.Neon
+    disc.Transparency = 0.35
+    disc.CastShadow = false
+    disc.Parent = Camera
+
+    local board = Instance.new("BillboardGui")
+    board.Size = UDim2.new(0, 90, 0, 30)
+    board.StudsOffset = Vector3.new(0, 4, 0)
+    board.AlwaysOnTop = true
+    board.Parent = disc
+
+    local text = Instance.new("TextLabel")
+    text.Size = UDim2.fromScale(1, 1)
+    text.BackgroundTransparency = 1
+    text.TextScaled = true
+    text.Font = Enum.Font.GothamBold
+    text.TextStrokeTransparency = 0
+    text.Parent = board
+
+    Landing.marker = disc
+    Landing.label = text
+end
+
+Landing.gravity = function()
+    local value = nil
+    local Game = require(ReplicatedStorage.Configuration.Game)
+    local State = require(ReplicatedStorage.Common.State)
+    value = State.get(ReplicatedStorage, State.Id.Modifier, "BallGravity", Game.Physics.Gravity)
+    if type(value) == "number" and value > 0 then return value end
+    return 17
+end
+
+Landing.velocity = function(part)
+    local Knit = require(ReplicatedStorage.Packages.Knit)
+    local controller = Knit.GetController("BallController")
+    if type(controller) == "table" and type(controller.ActiveBalls) == "table" then
+        for _, record in pairs(controller.ActiveBalls) do
+            local model = record.Ball
+            if model and model.Parent and model:IsAncestorOf(part) and typeof(record.Velocity) == "Vector3" then
+                return record.Velocity
+            end
+        end
+    end
+    return Landing.drift
+end
+
+Landing.solve = function(pos, vel, gravity, floorY)
+    local drop = pos.Y - floorY
+    if drop < 0 then return nil end
+    local disc = vel.Y * vel.Y + 2 * gravity * drop
+    if disc < 0 then return nil end
+    local flight = (vel.Y + math.sqrt(disc)) / gravity
+    if flight ~= flight or flight <= 0 or flight > 15 then return nil end
+    return flight
+end
+
+Landing.netHit = function(pos, vel, gravity, flight)
+    local map = Workspace:FindFirstChild("Map")
+    local collide = map and map:FindFirstChild("BallCollideOnly")
+    local net = collide and collide:FindFirstChild("Net")
+    if not net then return false end
+    local netZ = net.Position.Z
+    local gap = netZ - pos.Z
+    if math.abs(vel.Z) < 0.01 then return false end
+    local moment = gap / vel.Z
+    if moment <= 0 or moment >= flight then return false end
+    local height = pos.Y + vel.Y * moment - 0.5 * gravity * moment * moment
+    local across = pos.X + vel.X * moment
+    local top = net.Position.Y + net.Size.Y * 0.5
+    local base = net.Position.Y - net.Size.Y * 0.5
+    if height > top or height < base then return false end
+    return math.abs(across - net.Position.X) <= net.Size.X * 0.5
+end
+
+Landing.predict = function(ball)
+    local module = require(ReplicatedStorage.Common.Physics)
+    local gravity = Landing.gravity()
+    local pos = ball.Position
+    local vel = Landing.velocity(ball)
+    if typeof(vel) ~= "Vector3" then return nil end
+    local floorY = module.LastFloorHeight
+    if not floorY then
+        local height = module.calculateFloorHeight(pos, true)
+        floorY = height or nil
+    end
+    if not floorY then return nil end
+    local flight = Landing.solve(pos, vel, gravity, floorY)
+    if not flight then return nil end
+    local spot = Vector3.new(pos.X + vel.X * flight, floorY, pos.Z + vel.Z * flight)
+    local ground = module.calculateFloorHeight(Vector3.new(spot.X, pos.Y, spot.Z), true)
+    if type(ground) == "number" and math.abs(ground - floorY) > 0.05 then
+        local refined = Landing.solve(pos, vel, gravity, ground)
+        if refined then
+            flight = refined
+            spot = Vector3.new(pos.X + vel.X * flight, ground, pos.Z + vel.Z * flight)
+        end
+    end
+    return spot, module, flight, Landing.netHit(pos, vel, gravity, flight)
+end
+
+RunService.RenderStepped:Connect(function()
+    if not Landing.enabled then
+        if Landing.marker then Landing.clear() end
+        return
+    end
+    local ball = getNearestBall()
+    if not ball then
+        if Landing.marker then Landing.marker.Transparency = 1 end
+        Landing.last = nil
+        return
+    end
+    local now = os.clock()
+    if Landing.tracked == ball and Landing.last and now > Landing.stamp then
+        Landing.drift = (ball.Position - Landing.last) / (now - Landing.stamp)
+    end
+    Landing.tracked = ball
+    Landing.last = ball.Position
+    Landing.stamp = now
+
+local spot, physics, flight, netted = Landing.predict(ball)
+    if not spot then
+        if Landing.marker then Landing.marker.Transparency = 1 end
+        return
+    end
+    if not Landing.marker then Landing.build() end
+    local bounds = physics._getCourtlines and physics._getCourtlines()
+    local inside = true
+    if bounds and physics.isPositionInCourt then
+        local verdict = physics.isPositionInCourt(spot, nil, ball.Size.X * 0.5, nil)
+        inside = verdict
+    end
+    local tone, verdictText
+    if netted then tone = Color3.fromRGB(250, 180, 40) verdictText = "NET"
+    elseif inside then tone = Color3.fromRGB(60, 220, 90) verdictText = "IN"
+    else tone = Color3.fromRGB(235, 60, 60) verdictText = "OUT" end
+    local urgency = math.clamp(1 - flight / 2, 0, 1)
+    local span = 6 + urgency * 3
+    Landing.marker.Size = Vector3.new(0.2, span, span)
+    Landing.marker.Transparency = 0.35 - urgency * 0.15
+    Landing.marker.Color = tone
+    Landing.marker.CFrame = CFrame.new(spot + Vector3.new(0, 0.1, 0)) * CFrame.Angles(0, 0, math.rad(90))
+    Landing.label.Text = verdictText .. "  " .. string.format("%.1fs", flight)
+    Landing.label.TextColor3 = tone
+end)
+
+local function enableHitEffect()
+    if hitConnection then return end
+    hasFired = false
+    isLocalHit = false
+    local Remote = ReplicatedStorage.Packages._Index["sleitnick_knit@1.7.0"].knit.Services.BallService.RE.HitGround
+    Remote.OnClientEvent:Connect(function(...)
+        local args = {...}
+        local myName = LocalPlayer.Name
+        for _, val in pairs(args) do
+            if tostring(val) == myName then isLocalHit = true break end
+        end
+    end)
+    local function fireHitRemote(hitPos)
+        if hasFired then return end
+        if not isLocalHit then return end
+        if not hitEffectEnabled then return end
+        hasFired = true
+        local targetObject = workspace:FindFirstChild(LocalPlayer.Name)
+        local effectId = selectedEffect
+        local hardHit = true
+        if effectId == "GroundHit1" or effectId == "GroundHit2" then
+            hardHit = effectId == "GroundHit2"
+            effectId = nil
+        end
+        if firesignal then
+            firesignal(Remote.OnClientEvent, table.unpack({
+                hitPos, hardHit, false, 5, effectId, targetObject,
+                Vector3.new(-0.000002, 1, -0.000004)
+            }, 1, 7))
+        end
+        task.wait(0.5)
+        hasFired = false
+        isLocalHit = false
+    end
+    hitConnection = workspace.ChildAdded:Connect(function(child)
+        if child.Name == "HitIndicator" and child.Color == Color3.fromRGB(0, 255, 0) then
+            fireHitRemote(child.Position)
+        end
+    end)
+    hitConnection2 = workspace.DescendantAdded:Connect(function(child)
+        if child.Name == "HitIndicator" and child:IsA("BasePart") and child.Color == Color3.fromRGB(0, 255, 0) then
+            fireHitRemote(child.Position)
+        end
+    end)
+    hitRemovedConnection = workspace.DescendantRemoving:Connect(function(child)
+        if child.Name == "HitIndicator" then
+            hasFired = false
+            isLocalHit = false
+        end
+    end)
+end
+
+local function disableHitEffect()
+    if hitConnection then hitConnection:Disconnect() hitConnection = nil end
+    if hitConnection2 then hitConnection2:Disconnect() hitConnection2 = nil end
+    if hitRemovedConnection then hitRemovedConnection:Disconnect() hitRemovedConnection = nil end
+    hasFired = false
+    isLocalHit = false
+end
+
+local function enableAntiLag()
+    local function safeGet(inst, prop)
+        local ok, val = pcall(function() return inst[prop] end)
+        if ok then return val end
+        return nil
+    end
+    local function safeSet(inst, prop, value) inst[prop] = value end
+    local function remember(inst, prop)
+        if not inst then return false end
+        local data = changedProperties[inst]
+        if not data then data = {} changedProperties[inst] = data end
+        if data[prop] == nil then
+            local current = safeGet(inst, prop)
+            if current == nil then return false end
+            data[prop] = current
+        end
+        return true
+    end
+    local function set(inst, prop, value)
+        if not inst then return end
+        if not remember(inst, prop) then return end
+        safeSet(inst, prop, value)
+    end
+    local function skip(inst)
+        if not inst then return true end
+        local char = LocalPlayer.Character
+        if char and inst:IsDescendantOf(char) then return true end
+        return false
+    end
+    local function opt(inst)
+        if skip(inst) then return end
+        if inst:IsA("BasePart") then
+            set(inst, "Material", Enum.Material.SmoothPlastic)
+            set(inst, "Reflectance", 0)
+            set(inst, "CastShadow", false)
+            if inst:IsA("MeshPart") then
+                set(inst, "RenderFidelity", Enum.RenderFidelity.Performance)
+                set(inst, "TextureID", "")
+            end
+        elseif inst:IsA("Decal") or inst:IsA("Texture") then
+            set(inst, "Transparency", 1)
+        elseif inst:IsA("ParticleEmitter") or inst:IsA("Trail") or inst:IsA("Beam") or inst:IsA("Smoke") or inst:IsA("Fire") or inst:IsA("Sparkles") then
+            set(inst, "Enabled", false)
+        elseif inst:IsA("PointLight") or inst:IsA("SpotLight") or inst:IsA("SurfaceLight") then
+            set(inst, "Enabled", false)
+        end
+    end
+    set(Lighting, "GlobalShadows", false)
+    set(Lighting, "FogEnd", 1e9)
+    for _, e in ipairs(Lighting:GetChildren()) do
+        if e:IsA("PostEffect") then set(e, "Enabled", false) end
+    end
+    for _, inst in ipairs(workspace:GetDescendants()) do opt(inst) end
+    table.insert(antilagConnections, workspace.DescendantAdded:Connect(opt))
+end
+
+local function disableAntiLag()
+    for inst, props in pairs(changedProperties) do
+        for prop, value in pairs(props) do inst[prop] = value end
+    end
+    changedProperties = {}
+    for _, conn in ipairs(antilagConnections) do conn:Disconnect() end
+    antilagConnections = {}
+end
+
+local function startAutoSpin()
+    task.spawn(function()
+        while autoSpin do
+            local lobby = LocalPlayer.PlayerGui:FindFirstChild("Interface")
+            local lobbyFolder = lobby and lobby:FindFirstChild("Lobby")
+            local stylesFolder = lobbyFolder and lobbyFolder:FindFirstChild("Styles")
+            local topPanel = stylesFolder and stylesFolder:FindFirstChild("TopPanel")
+            local displayName = topPanel and topPanel:FindFirstChild("DisplayName")
+            local currentStyle = displayName and displayName.Text or ""
+            local matched = false
+            for _, style in ipairs(desiredStyles) do
+                if currentStyle == style then
+                    matched = true
+                    break
+                end
+            end
+            if matched then
+                autoSpin = false
+                Parasite:Notify({ Title = "Auto Style Spin", Content = "Got: " .. currentStyle, Type = "Success", Duration = 3 })
+                break
+            end
+            local StyleService = ReplicatedStorage.Packages._Index["sleitnick_knit@1.7.0"].knit.Services.StyleService
+            if StyleService then
+                local RF = StyleService:FindFirstChild("RF")
+                if RF then
+                    local Roll = RF:FindFirstChild("Roll")
+                    if Roll then
+                        Roll:InvokeServer(spinType == "Lucky")
+                    end
+                end
+            end
+            task.wait(0.5)
+        end
+    end)
+end
+
+local function startAutoAbilitySpin()
+    task.spawn(function()
+        while autoAbilitySpin do
+            local lobby = LocalPlayer.PlayerGui:FindFirstChild("Interface")
+            local lobbyFolder = lobby and lobby:FindFirstChild("Lobby")
+            local abilitiesFolder = lobbyFolder and lobbyFolder:FindFirstChild("Abilities")
+            local topPanel = abilitiesFolder and abilitiesFolder:FindFirstChild("TopPanel")
+            local displayName = topPanel and topPanel:FindFirstChild("DisplayName")
+            local currentAbility = displayName and displayName.Text or ""
+            local matched = false
+            for _, ability in ipairs(desiredAbilities) do
+                if currentAbility == ability then
+                    matched = true
+                    break
+                end
+            end
+            if matched then
+                autoAbilitySpin = false
+                Parasite:Notify({ Title = "Auto Ability Spin", Content = "Got: " .. currentAbility, Type = "Success", Duration = 3 })
+                break
+            end
+            local AbilityService = ReplicatedStorage.Packages._Index["sleitnick_knit@1.7.0"].knit.Services.AbilityService
+            if AbilityService then
+                local RF = AbilityService:FindFirstChild("RF")
+                if RF then
+                    local Roll = RF:FindFirstChild("Roll")
+                    if Roll then
+                        Roll:InvokeServer(abilitySpinType == "Lucky")
+                    end
+                end
+            end
+            task.wait(0.5)
+        end
+    end)
+end
+
+local function createDraggableButton(btnName, text, color, startPos, onClick)
+    local sg = Instance.new("ScreenGui")
+    sg.Name = MARK .. "_" .. btnName
+    sg.ResetOnSpawn = false
+    sg.IgnoreGuiInset = true
+    sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    sg.DisplayOrder = 9999
+
+    local placed = false
+    if type(gethui) == "function" then
+        local ok, container = pcall(gethui)
+        if ok and typeof(container) == "Instance" then
+            sg.Parent = container
+            placed = true
+        end
+    end
+    if not placed then
+        local ok = pcall(function()
+            sg.Parent = game:GetService("CoreGui")
+        end)
+        if ok then placed = true end
+    end
+    if not placed then
+        sg.Parent = LocalPlayer:WaitForChild("PlayerGui")
+    end
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 50, 0, 50)
+    btn.Position = startPos
+    btn.BackgroundColor3 = color
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextScaled = true
+    btn.Font = Enum.Font.GothamBold
+    btn.Parent = sg
+    btn.BackgroundTransparency = 0.2
+    btn.BorderSizePixel = 0
+    btn.Selectable = false
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1, 0)
+    corner.Parent = btn
+
+    local dragging = false
+    local dragStart = nil
+    local startPos2 = nil
+    btn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos2 = btn.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    btn.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            btn.Position = UDim2.new(startPos2.X.Scale, startPos2.X.Offset + delta.X, startPos2.Y.Scale, startPos2.Y.Offset + delta.Y)
+        end
+    end)
+    btn.MouseButton1Click:Connect(onClick)
+    btn.Visible = false
+    return btn
+end
+
+newSpikeButton = createDraggableButton("Spike", "Spike", Color3.fromRGB(255, 165, 0), UDim2.new(0.5, -25, 0.85, -25), fireNewSpike)
+stopBallButton = createDraggableButton("Stop", "Stop", Color3.fromRGB(255, 50, 50), UDim2.new(0.35, -25, 0.8, -25), stopBall)
+aimButton = createDraggableButton("Aim", "Aim", Color3.fromRGB(50, 150, 255), UDim2.new(0.65, -25, 0.8, -25), aim)
+dashButton = createDraggableButton("Dash", "Dash", Color3.fromRGB(255, 200, 0), UDim2.new(0.15, -25, 0.8, -25), akariDash)
+leadFeetButton = createDraggableButton("LF", "LF", Color3.fromRGB(0, 255, 200), UDim2.new(0.25, -25, 0.8, -25), leadFeetSlam)
+
+local Window = Parasite:CreateWindow({
+    Name = "PARASITE HUB",
+    LoadingSubtitle = "Volleyball Legends",
+    ToggleUIKeybind = "RightControl",
+    ConfigurationSaving = { Enabled = true, FolderName = "ParasiteHub", FileName = "default" },
+    Home = {
+        Name = "Home",
+        Stats = { "FPS", "Ping", "Executor", "Game", "Region", "Time" },
+        Pages = {
+            { Name = "Changelog", Icon = "scroll-text", Entries = {
+                { Title = "v1.0", Tag = "Latest", Changes = { "Full feature restore", "All buttons wired", "Landing marker active", "Auto Spin wired", "Redeem codes re-added", "Syntax error fixed", "Character lines face tracking", "Auto Receive keybind", "Teleport queue" } },
+                { Title = "Staff", Tag = "Parasite", Changes = { "Owner 鈥� Hense", "Co Owner 鈥� PUGGE", "Sub Owner 鈥� Enrique", "Support 鈥� Scarlet", "Support 鈥� 4ZXZA_SANTS" } },
+            }},
+        },
+    },
+})
+
+task.spawn(function()
+    task.wait(2)
+    if Parasite.Windows and Parasite.Windows[1] then
+        local w = Parasite.Windows[1]
+        if w._playIntro and not w._introDone then w:_playIntro() end
+        if w.Body then w.Body.GroupTransparency = 0 end
+        if w.Shadow then w.Shadow.ImageTransparency = 0.6 end
+        if w.BodyStroke then w.BodyStroke.Transparency = 0 end
+        if w.Root then w.Root.Visible = true
+            if w.Scale then w.Scale.Scale = w._fitScale or 1 end
+        end
+        if w._outLayer then w._outLayer.Visible = false end
+        if w._inLayer then w._inLayer.Visible = false end
+    end
+end)
+task.spawn(function()
+    task.wait(2.5)
+    local w = Parasite.Windows and Parasite.Windows[1]
+    if not w then return end
+    local stroke = w.BodyStroke or (w.Body and w.Body:FindFirstChildWhichIsA("UIStroke", true))
+    if stroke then applyFlameBorder(stroke, 2.5, 110) end
+end)
+task.spawn(function()
+    task.wait(3)
+    local roots = {}
+    if type(gethui) == "function" then
+        pcall(function() table.insert(roots, gethui()) end)
+    end
+    pcall(function() table.insert(roots, game:GetService("CoreGui")) end)
+    table.insert(roots, LocalPlayer.PlayerGui)
+
+    for _, root in ipairs(roots) do
+        for _, d in ipairs(root:GetDescendants()) do
+            if d:IsA("TextLabel") and d.Text == "Parasite Hub" then
+                local p = d.Parent
+                while p and not p:FindFirstChildOfClass("UICorner") do
+                    p = p.Parent
+                end
+                if p and p:IsA("GuiObject") then
+                    applyFlameBorder(p, 2, 110)
+                    return
+                end
+            end
+        end
+    end
+end)
+task.spawn(function()
+    task.wait(3)
+    local w = Parasite.Windows and Parasite.Windows[1]
+    if not (w and w.Body) then return end
+    local layer = Instance.new("Frame")
+    layer.Size = UDim2.fromScale(1, 1)
+    layer.BackgroundTransparency = 1
+    layer.ClipsDescendants = true
+    layer.ZIndex = 0
+    layer.Parent = w.Body
+    while layer.Parent do
+        local s = math.random(3, 6)
+        local dot = Instance.new("Frame")
+        dot.Size = UDim2.fromOffset(s, s)
+        local x = math.random()
+        dot.Position = UDim2.new(x, 0, 1, 0)
+        dot.BackgroundColor3 = math.random() < 0.5 and Color3.fromRGB(255, 80, 40) or Color3.fromRGB(255, 170, 60)
+        dot.BackgroundTransparency = 0.3
+        dot.BorderSizePixel = 0
+        dot.ZIndex = 0
+        Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
+        dot.Parent = layer
+        local tw = TweenService:Create(dot, TweenInfo.new(math.random(30, 60) / 10, Enum.EasingStyle.Sine), {
+            Position = UDim2.new(x + (math.random() - 0.5) * 0.15, 0, -0.05, 0),
+            BackgroundTransparency = 1,
+        })
+        tw:Play()
+        tw.Completed:Once(function() dot:Destroy() end)
+        task.wait(0.15)
+    end
+end)
+task.spawn(function()
+    task.wait(3)
+    local w = Parasite.Windows and Parasite.Windows[1]
+    local stroke = w and w.BodyStroke
+    if stroke then
+        TweenService:Create(stroke, TweenInfo.new(1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Thickness = 4 }):Play()
+    end
+end)
+task.spawn(function()
+    task.wait(3)
+    local roots = { LocalPlayer.PlayerGui, game:GetService("CoreGui") }
+    if type(gethui) == "function" then pcall(function() table.insert(roots, gethui()) end) end
+    for _, root in ipairs(roots) do
+        for _, d in ipairs(root:GetDescendants()) do
+            if d:IsA("TextLabel") and d.Text:upper():find("^PARASITE") and not d.Text:upper():find("PROTECTION") then
+                d.TextColor3 = Color3.new(1, 1, 1)
+                local g = Instance.new("UIGradient")
+                g.Color = ColorSequence.new({
+                    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 40, 40)),
+                    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 240, 225)),
+                    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 140, 30)),
+                })
+                g.Parent = d
+                RunService.RenderStepped:Connect(function(dt)
+                    g.Rotation = (g.Rotation + 90 * dt) % 360
+                end)
+                return
+            end
+        end
+    end
+end)
+
+-- ====== Auto Kisuki Aim: giu dive thi khoa huong ve phia bong ======
+local DiveAim = (function()
+    local M = {
+        enabled = false,
+        holdTime = 0.35, -- giu huong them sau khi tha (giay)
+        lungeTime = 0.3, -- giu huong luc bat dau lao (giay)
+        lead = 0.1,      -- ngam lech theo huong bong bay
+        showNew = false, -- thong bao ID animation la (de them nhan vat khac)
+    }
+
+    -- Animation CHUAN BI luot: dang phat = dang giu dive -> khoa huong lien tuc
+    local HOLD_IDS = {
+        ["90188702289868"] = true,
+        ["107697490221568"] = true,
+    }
+    -- Animation LAO di: chi khoa huong trong lungeTime dau
+    local LUNGE_IDS = {
+        ["81476034712243"] = true,
+    }
+    -- Khong dua animation di chuyen (507777826, 74010431615752) vao day
+
+    local RS_NAME = "ParasiteKisukiAim"
+    local cache = { hrp = nil, hum = nil, ballPart = nil, vel = Vector3.zero }
+    local lastPos = nil
+    local holdTracks = {}
+    local seenIds = {}
+    local conns = {}
+    local running = false
+    local remoteHooked = false
+    local wasActive = false
+    local untilT = 0
+    local savedAuto, autoSaved = true, false
+
+    local function findBall(hrp)
+        local best, bestD = nil, math.huge
+        for _, model in ipairs(Workspace:GetChildren()) do
+            if model:IsA("Model") and model.Name:match("^CLIENT_BALL_%d+$") then
+                for _, part in ipairs(model:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        local d = (part.Position - hrp.Position).Magnitude
+                        if d < bestD then bestD = d best = part end
+                        break
+                    end
+                end
+            end
+        end
+        return best
+    end
+
+    local function lockAim()
+        local hrp = cache.hrp
+        local part = cache.ballPart
+        if not (hrp and hrp.Parent and part and part.Parent) then return end
+        -- tat tu xoay (di bo va shift lock deu xoay nhan vat moi khung hinh)
+        local hum = cache.hum
+        if hum and hum.Parent then
+            if not autoSaved then
+                savedAuto = hum.AutoRotate
+                autoSaved = true
+            end
+            hum.AutoRotate = false
+        end
+        local bp = part.Position + Vector3.new(cache.vel.X, 0, cache.vel.Z) * M.lead
+        local pos = hrp.Position
+        local flat = Vector3.new(bp.X - pos.X, 0, bp.Z - pos.Z)
+        if flat.Magnitude < 0.01 then return end
+        hrp.CFrame = CFrame.lookAt(pos, pos + flat.Unit)
+        hrp.AssemblyAngularVelocity = Vector3.zero
+    end
+
+    local function releaseAim()
+        if autoSaved then
+            local hum = cache.hum
+            if hum and hum.Parent then hum.AutoRotate = savedAuto end
+            autoSaved = false
+        end
+    end
+
+    local function isActive()
+        local any = false
+        for tr in pairs(holdTracks) do
+            if tr.IsPlaying then any = true else holdTracks[tr] = nil end
+        end
+        if wasActive and not any then untilT = math.max(untilT, os.clock() + M.holdTime) end
+        wasActive = any
+        return any or os.clock() < untilT
+    end
+
+    local function step()
+        if M.enabled and isActive() then lockAim() else releaseAim() end
+    end
+
+    local function onHeartbeat(dt)
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        cache.hrp = hrp
+        cache.hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hrp then
+            local ball = findBall(hrp)
+            if ball then
+                if lastPos and dt > 0 then cache.vel = (ball.Position - lastPos) / dt end
+                lastPos = ball.Position
+                cache.ballPart = ball
+            else
+                lastPos = nil
+                cache.ballPart = nil
+                cache.vel = Vector3.zero
+            end
+        end
+        step()
+    end
+
+    local function hookChar(char)
+        task.spawn(function()
+            local hum = char:WaitForChild("Humanoid", 10)
+            local animator = hum and (hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 10))
+            if not animator or not running then return end
+            table.insert(conns, animator.AnimationPlayed:Connect(function(track)
+                local id = ""
+                pcall(function() id = tostring(track.Animation.AnimationId):match("%d+") or "" end)
+                if HOLD_IDS[id] then
+                    holdTracks[track] = true
+                elseif LUNGE_IDS[id] then
+                    untilT = math.max(untilT, os.clock() + M.lungeTime)
+                elseif M.showNew and id ~= "" and not seenIds[id] then
+                    seenIds[id] = true
+                    Parasite:Notify({ Title = "Kisuki Aim", Content = "Anim " .. id, Type = "Info", Duration = 2 })
+                end
+            end))
+        end)
+    end
+
+    -- Khoa them dung luc game gui lenh dive len server
+    local function installRemoteHook()
+        if remoteHooked then return end
+        if not (hookmetamethod and getnamecallmethod) then return end
+        local ok = pcall(function()
+            local old
+            local handler = function(self, ...)
+                local method = getnamecallmethod() -- doc ngay dau tien
+                if running and M.enabled and method == "FireServer" then
+                    local name = self.Name
+                    if name == "RegisterMoved" or name == "CreateHitbox" then
+                        local a1 = (...)
+                        local isDive = (a1 == "Dive")
+                        if not isDive and type(a1) == "table" then
+                            for _, v in pairs(a1) do
+                                if v == "Dive" then isDive = true break end
+                            end
+                        end
+                        if isDive then
+                            untilT = math.max(untilT, os.clock() + M.lungeTime)
+                            lockAim()
+                        end
+                    end
+                end
+                return old(self, ...)
+            end
+            old = hookmetamethod(game, "__namecall", newcclosure and newcclosure(handler) or handler)
+        end)
+        remoteHooked = ok
+    end
+
+    function M.start()
+        if running then return end
+        running = true
+        table.insert(conns, RunService.Heartbeat:Connect(function(dt) pcall(onHeartbeat, dt) end))
+        table.insert(conns, RunService.Stepped:Connect(function() pcall(step) end))
+        pcall(function()
+            RunService:BindToRenderStep(RS_NAME, Enum.RenderPriority.Last.Value, function() pcall(step) end)
+        end)
+        if LocalPlayer.Character then hookChar(LocalPlayer.Character) end
+        table.insert(conns, LocalPlayer.CharacterAdded:Connect(hookChar))
+        installRemoteHook()
+    end
+
+    function M.stop()
+        running = false
+        for _, c in ipairs(conns) do pcall(function() c:Disconnect() end) end
+        conns = {}
+        pcall(function() RunService:UnbindFromRenderStep(RS_NAME) end)
+        holdTracks = {}
+        wasActive = false
+        releaseAim()
+    end
+
+    return M
+end)()
+
+local Main = Window:CreateTab({ Name = "Main", Icon = "swords" })
+local Character = Window:CreateTab({ Name = "Character", Icon = "user" })
+local Visuals = Window:CreateTab({ Name = "Visuals", Icon = "eye" })
+local Misc = Window:CreateTab({ Name = "Misc", Icon = "wrench" })
+local Auto = Window:CreateTab({ Name = "Auto", Icon = "zap" })
+local GameJoin = Window:CreateTab({ Name = "Game Join", Icon = "gamepad-2" })
+local Settings = Window:CreateTab({ Name = "Settings", Icon = "settings" })
+
+Main:CreateSection("Spike Settings")
+
+Main:CreateToggle({ Name = "Redirect Spike", Desc = "Spike toward camera direction", CurrentValue = false, Flag = "redirectspike",
+    Callback = function(v) if v then enableRedirectSpike() else disableRedirectSpike() end end })
+Main:CreateToggle({ Name = "Silent Spike", Desc = "Spike with no animation or sound", CurrentValue = false, Flag = "newspike",
+    Callback = function(v)
+        newSilentSpikeEnabled = v
+        if newSpikeButton then newSpikeButton.Visible = v end
+    end })
+Main:CreateKeybind({ Name = "Silent Spike bind", CurrentKeybind = "R", Flag = "newspikebind", Callback = fireNewSpike })
+Main:CreateToggle({ Name = "Sanju Tilt", CurrentValue = false, Flag = "sanju",
+    Callback = function(v) if v then enableSanjuTilt() else disableSanjuTilt() end end })
+Main:CreateToggle({ Name = "Max Charge Special", CurrentValue = false, Flag = "maxcharge",
+    Callback = function(v) if v then enableMaxCharge() else disableMaxCharge() end end })
+Main:CreateToggle({ Name = "Fake Spike", CurrentValue = false, Flag = "fakespike",
+    Callback = function(v) fakeSpikeEnabled = v end })
+
+Main:CreateSection("Aim Set")
+Main:CreateToggle({ Name = "Aim Set", Desc = "Auto-aims JumpSet at target", CurrentValue = false, Flag = "aimset",
+    Callback = function(v) AimSet.enabled = v if v then AimSet.start() else AimSet.stop() end end })
+Main:CreateDropdown({ Name = "Aim Set Target", Options = { "Nearest", "Random" }, CurrentOption = "Nearest", Flag = "aimsettarget",
+    Callback = function(v) AimSet.mode = v end })
+Main:CreateSection("Max Serve")
+Main:CreateToggle({ Name = "Max Serve", CurrentValue = false, Flag = "maxserve",
+    Callback = function(v) if v then enableMaxServe() else disableMaxServe() end end })
+
+Main:CreateSection("Hitbox Settings")
+Main:CreateToggle({ Name = "Enable Hitbox", CurrentValue = false, Flag = "hitboxenable",
+    Callback = function(v) if v then enableHitbox() else disableHitbox() end end })
+Main:CreateSlider({ Name = "Hitbox Size", Range = { 0, 20 }, Increment = 1, Suffix = " studs", CurrentValue = 5, Flag = "hitboxsize",
+    Callback = setHitboxScale })
+Main:CreateColorPicker({ Name = "Hitbox Color", Color = Color3.fromRGB(255, 80, 80), Flag = "hitboxcolor",
+    Callback = function(color) setHitboxColor(color) end })
+Main:CreateButton({ Name = "Remove Hitboxes", Icon = "trash-2", Callback = function() Hitbox.disable() end })
+Main:CreateButton({ Name = "Show Stop Ball", Icon = "octagon", Callback = function()
+    stopBallVisible = not stopBallVisible
+    if stopBallButton then stopBallButton.Visible = stopBallVisible end
+end })
+Main:CreateButton({ Name = "Show Aim", Icon = "crosshair", Callback = function()
+    aimVisible = not aimVisible
+    if aimButton then aimButton.Visible = aimVisible end
+end })
+
+Main:CreateSection("Movement")
+Main:CreateToggle({ Name = "Desync", CurrentValue = false, Flag = "desync",
+    Callback = function(v) if v then enableDesync() else disableDesync() end end })
+Main:CreateToggle({ Name = "Akari Dash", CurrentValue = false, Flag = "akaridash",
+    Callback = function(v) akariDashEnabled = v if dashButton then dashButton.Visible = v end end })
+Main:CreateKeybind({ Name = "Akari Dash bind", CurrentKeybind = "F", Flag = "akaridashbind", Callback = akariDash })
+Main:CreateToggle({ Name = "Lead Feet", CurrentValue = false, Flag = "leadfeet",
+    Callback = function(v) leadFeetEnabled = v if leadFeetButton then leadFeetButton.Visible = v end end })
+Main:CreateKeybind({ Name = "Lead Feet bind", CurrentKeybind = "G", Flag = "leadfeetbind", Callback = leadFeetSlam })
+
+Main:CreateSection("Performance")
+Main:CreateToggle({ Name = "Anti-Lag", CurrentValue = false, Flag = "antilag",
+    Callback = function(v) if v then enableAntiLag() else disableAntiLag() end end })
+
+Main:CreateSection("Jump ESP")
+Main:CreateToggle({ Name = "Jump ESP", Desc = "Highlight enemies while jumping", CurrentValue = false, Flag = "esp",
+    Callback = function(v)
+        espJumpEnabled = v
+        if not v then for player in pairs(espHighlights) do removeESP(player) end end
+    end })
+
+Main:CreateButton({ Name = "Data Rollback", Desc = "Resets your spike keybind", Icon = "rotate-ccw",
+    Callback = function()
+        local Remote = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index")
+            :WaitForChild("sleitnick_knit@1.7.0"):WaitForChild("knit")
+            :WaitForChild("Services"):WaitForChild("SettingsService"):WaitForChild("RF")
+            :WaitForChild("UpdateKeybind")
+        Remote:InvokeServer("MouseButton1", true, "Spike\xE2\x80\x8B\x8F")
+        game:GetService("TeleportService"):Teleport(game.PlaceId)
+    end })
+
+Character:CreateSection("Attributes")
+Character:CreateInput({ Name = "Dive Speed", PlaceholderText = "0.95", Flag = "divespeed",
+    Callback = function(v) local n = tonumber(v) if n then LocalPlayer:SetAttribute("Multiplier_DiveSpeed", n) end end })
+Character:CreateInput({ Name = "Jump Power", PlaceholderText = "1.1", Flag = "jumppower",
+    Callback = function(v) local n = tonumber(v) if n then LocalPlayer:SetAttribute("Multiplier_JumpPower", n) end end })
+Character:CreateInput({ Name = "Speed", PlaceholderText = "0.85", Flag = "speed",
+    Callback = function(v) local n = tonumber(v) if n then LocalPlayer:SetAttribute("Multiplier_Speed", n) end end })
+
+Character:CreateSection("Ball ESP")
+Character:CreateToggle({ Name = "Ball ESP", Desc = "Highlights last player who touched ball", CurrentValue = false, Flag = "ballesp",
+    Callback = function(v) BallESP.enabled = v if v then BallESP.start() else BallESP.stop() end end })
+Character:CreateColorPicker({ Name = "ESP Color", Color = Color3.fromRGB(255, 80, 80), Flag = "ballespcolor",
+    Callback = function(color) BallESP.setColor(color) end })
+
+Character:CreateSection("Movement")
+Character:CreateToggle({ Name = "Air Movement", CurrentValue = false, Flag = "airmove",
+    Callback = function(v)
+        airMovement = v
+        if not v and bodyVelocity then bodyVelocity:Destroy() bodyVelocity = nil end
+    end })
+Character:CreateSlider({ Name = "Air Movement Speed", Range = { 0, 100 }, Increment = 1, CurrentValue = 16, Flag = "airspeed",
+    Callback = function(v) airMovementSpeed = v end })
+Character:CreateToggle({ Name = "Character Lines", Desc = "Beam lines to enemies (face tracking)", CurrentValue = false, Flag = "characterlines",
+    Callback = function(v)
+        linesEnabled = v
+        if not v then for player in pairs(lines) do removeLine(player) end end
+    end })
+Character:CreateSlider({ Name = "Line Distance", Range = { 10, 200 }, Increment = 1, CurrentValue = 50, Flag = "linedistance",
+    Callback = function(v) lineDistance = v end })
+
+Visuals:CreateSection("Ball Prediction")
+Visuals:CreateToggle({ Name = "Landing Marker", Desc = "Predict where the ball lands", CurrentValue = false, Flag = "ballmarker",
+    Callback = function(v) Landing.enabled = v if not v then Landing.clear() end end })
+
+Visuals:CreateSection("Score Effect")
+Visuals:CreateDropdown({ Name = "Select Score Effect", Options = effectList, CurrentOption = effectList[1] or "SupernovaScoreEffect",
+    Flag = "effectselect", Callback = function(v) selectedEffect = v end })
+Visuals:CreateToggle({ Name = "ScoreEffect Changer", CurrentValue = false, Flag = "scoreeffect",
+    Callback = function(v) hitEffectEnabled = v if v then enableHitEffect() else disableHitEffect() end end })
+Visuals:CreateToggle({ Name = "Random Effect", CurrentValue = false, Flag = "randomeffect",
+    Callback = function(v) RandomVisual.EffectEnabled = v end })
+
+Visuals:CreateSection("Protection")
+Visuals:CreateToggle({ Name = "Protect", Desc = "Enable/Disable all protection features", CurrentValue = true, Flag = "protect",
+    Callback = toggleProtection })
+Visuals:CreateToggle({ Name = "TSH Animation", CurrentValue = false, Flag = "tshanimation",
+    Callback = function(v) tshAnimationEnabled = v end })
+Visuals:CreateToggle({ Name = "Hidari Animation", CurrentValue = false, Flag = "hidarianimation",
+    Callback = function(v) hidariAnimationEnabled = v end })
+Visuals:CreateToggle({ Name = "Kazana Blue Jump", CurrentValue = false, Flag = "kazanabluejump",
+    Callback = function(v) kazanaBlueEnabled = v end })
+Visuals:CreateToggle({ Name = "Kazana White Jump", CurrentValue = false, Flag = "kazanawhitejump",
+    Callback = function(v) kazanaWhiteEnabled = v end })
+
+Visuals:CreateSection("Custom Protect")
+Visuals:CreateToggle({ Name = "Custom Protect", CurrentValue = false, Flag = "customprotect", Callback = CustomProtect.toggle })
+Visuals:CreateInput({ Name = "Custom Name", PlaceholderText = "CUSTOM NAME", Flag = "customprotectname",
+    Callback = function(v) CustomProtect.Name = v end })
+Visuals:CreateInput({ Name = "Custom Title", PlaceholderText = "<font color='#00FF00'><b>Custom</b></font>",
+    Flag = "customprotecttitle", Callback = function(v) CustomProtect.Title = v end })
+
+Visuals:CreateSection("Player Card")
+Visuals:CreateDropdown({ Name = "Select Player Card", Options = cardList, CurrentOption = cardList[1] or "UltimateChampionPlayerCard",
+    Flag = "cardselect", Callback = function(v) selectedCard = v applyPlayerCard(v) end })
+Visuals:CreateToggle({ Name = "PlayerCard Changer", CurrentValue = false, Flag = "playercard",
+    Callback = function(v)
+        playerCardEnabled = v
+        if v then enablePlayerCard() else if not RandomVisual.CardEnabled then disablePlayerCard() end end
+    end })
+Visuals:CreateToggle({ Name = "Random Card", CurrentValue = false, Flag = "randomcard",
+    Callback = function(v)
+        RandomVisual.CardEnabled = v
+        if v then
+            local rc = getRandomFromFolder("PlayerCard")
+            if rc then selectedCard = rc end
+            if not playerCardEnabled then enablePlayerCard() end
+        else
+            if not playerCardEnabled then disablePlayerCard() end
+        end
+    end })
+
+Visuals:CreateSection("Ball Changer")
+Visuals:CreateDropdown({ Name = "Select Ball Skin", Options = ballSkinList, CurrentOption = ballSkinList[1] or "ClassicBall",
+    Flag = "ballskinselect", Callback = function(v) selectedBallSkin = v end })
+Visuals:CreateToggle({ Name = "Random Ball", CurrentValue = false, Flag = "randomball",
+    Callback = function(v) RandomVisual.BallEnabled = v end })
+
+Visuals:CreateSection("Jersey Changer")
+Visuals:CreateDropdown({ Name = "Select Jersey", Options = jerseyList, CurrentOption = jerseyList[1] or "DragonTuxedoJersey",
+    Flag = "jerseyselect", Callback = function(v) selectedJersey = v pickedTeam = nil end })
+Misc:CreateSection("FFlags Applier")
+Misc:CreateInput({ Name = "FFlags JSON", PlaceholderText = '{ "DFIntTaskSchedulerTargetFps": "9999" }', Flag = "fflagsjson",
+    Callback = function() end })
+Misc:CreateButton({ Name = "Apply FFlags", Icon = "zap",
+    Callback = function()
+        local el = Parasite.Flags and Parasite.Flags.fflagsjson
+        local text = el and el:Get() or ""
+        if text == "" then Parasite:Notify({ Title = "Paste JSON first", Type = "Warning" }) return end
+        FFlags.apply(text)
+    end })
+
+Misc:CreateSection("Shop")
+Misc:CreateButton({ Name = "Buy Emote", Callback = function()
+    local RF = ReplicatedStorage.Packages._Index["sleitnick_knit@1.7.0"].knit.Services.PackService.RF
+    if RF then local Open = RF:FindFirstChild("Open") if Open then Open:InvokeServer("Emote1") end end
+end })
+Misc:CreateButton({ Name = "Buy Effect", Callback = function()
+    local RF = ReplicatedStorage.Packages._Index["sleitnick_knit@1.7.0"].knit.Services.PackService.RF
+    if RF then local Open = RF:FindFirstChild("Open") if Open then Open:InvokeServer("ScoreEffect1") end end
+end })
+
+Misc:CreateSection("Claim Rewards")
+Misc:CreateButton({ Name = "Claim Level Rewards", Callback = function()
+    local Svc = ReplicatedStorage.Packages._Index["sleitnick_knit@1.7.0"].knit.Services.LevelService
+    if Svc then local RF = Svc:FindFirstChild("RF") if RF then local C = RF:FindFirstChild("ClaimLevelRewards") if C then C:InvokeServer() end end end
+end })
+Misc:CreateButton({ Name = "Claim Quest Rewards", Callback = function()
+    local Svc = ReplicatedStorage.Packages._Index["sleitnick_knit@1.7.0"].knit.Services.QuestService
+    if Svc then local RF = Svc:FindFirstChild("RF") if RF then local C = RF:FindFirstChild("ClaimAll") if C then C:InvokeServer(true) end end end
+end })
+Misc:CreateButton({ Name = "Redeem All Codes", Callback = function()
+    local function fetchCodes()
+        local success, data = pcall(function()
+            return game:HttpGet("https://beebom.com/haikyuu-legends-codes/")
+        end)
+        if not success or not data then return {} end
+        local newCodes = {}
+        local processed = {}
+        for line in string.gmatch(data, "[^\n]+") do
+            if string.find(line, "(NEW)") then
+                local code = string.match(line, "(%u+[%u%d_]+)")
+                if code and not processed[code] then
+                    processed[code] = true
+                    table.insert(newCodes, code)
+                end
+            end
+            if #newCodes >= 3 then break end
+        end
+        return newCodes
+    end
+    local codes = fetchCodes()
+    if #codes == 0 then
+        Parasite:Notify({ Title = "Redeem", Content = "No codes found", Type = "Warning" })
+        return
+    end
+    local CodeService = ReplicatedStorage.Packages._Index["sleitnick_knit@1.7.0"].knit.Services.CodeService
+    if CodeService then
+        local RF = CodeService:FindFirstChild("RF")
+        if RF then
+            local Redeem = RF:FindFirstChild("Redeem")
+            if Redeem then
+                for _, code in ipairs(codes) do
+                    Redeem:InvokeServer(code)
+                    task.wait(0.2)
+                end
+            end
+        end
+    end
+    Parasite:Notify({ Title = "Redeem", Content = "Redeemed " .. #codes .. " code(s)", Type = "Success" })
+end })
+
+-- ====== Auto tab ======
+Auto:CreateSection("Auto Receive")
+Auto:CreateToggle({ Name = "Auto Receive", Desc = "Auto receive ball when grounded", CurrentValue = false, Flag = "autoreceive",
+    Callback = function(v) AutoReceive.enabled = v if v then AutoReceive.start() else AutoReceive.stop() end end })
+Auto:CreateKeybind({ Name = "Auto Receive bind", CurrentKeybind = "X", Flag = "autoreceivebind",
+    Callback = function()
+        AutoReceive.enabled = not AutoReceive.enabled
+        if AutoReceive.enabled then
+            AutoReceive.start()
+        else
+            AutoReceive.stop()
+        end
+        local toggle = Parasite.Flags and Parasite.Flags.autoreceive
+        if toggle then
+            pcall(function() toggle:Set(AutoReceive.enabled, true) end)
+        end
+        Parasite:Notify({
+            Title = "Auto Receive",
+            Content = AutoReceive.enabled and "Enabled" or "Disabled",
+            Type = AutoReceive.enabled and "Success" or "Info",
+            Duration = 1,
+        })
+    end })
+Auto:CreateDropdown({ Name = "Receive Method", Options = { "Bump", "Set", "Dive" }, CurrentOption = "Bump", Flag = "autoreceivemethod",
+    Callback = function(v) AutoReceive.setMethod(v) end })
+Auto:CreateSlider({ Name = "Receive Range", Range = { 3, 50 }, Increment = 1, CurrentValue = 20, Flag = "autoreceiverange",
+    Callback = function(v) AutoReceive.setRadius(v) end })
+
+Auto:CreateSection("Auto Set")
+Auto:CreateToggle({ Name = "Auto Set", Desc = "Aims and fires a set at target", CurrentValue = false, Flag = "autoset",
+    Callback = function(v) AutoSet.enabled = v if v then AutoSet.start() else AutoSet.stop() end end })
+Auto:CreateDropdown({ Name = "Auto Set Target", Options = { "Nearest", "Random" }, CurrentOption = "Nearest", Flag = "autosettarget",
+    Callback = function(v) AutoSet.mode = v end })
+Auto:CreateKeybind({ Name = "Set keybind", CurrentKeybind = "F", Flag = "autosetfirebind",
+    Callback = function()
+        if not AutoSet.enabled then return end
+        if AutoSet.fire() then Parasite:Notify({ Title = "Set fired", Type = "Success", Duration = 1 })
+        else Parasite:Notify({ Title = "No target or ball", Type = "Warning", Duration = 1 }) end
+    end })
+
+Auto:CreateSection("Auto Farm")
+Auto:CreateToggle({ Name = "Auto Farm", Desc = "Spike/Block/Jump/TP farm loop with its own GUI", CurrentValue = false, Flag = "autofarm",
+    Callback = function(v)
+        if v then AutoFarm:start() else AutoFarm:stop() end
+    end })
+
+Auto:CreateSection("Auto Counter")
+Auto:CreateToggle({ Name = "Auto Counter", Desc = "Counters enemy spike at the net", CurrentValue = false, Flag = "autocounter",
+    Callback = function(v) AutoCounter.enabled = v end })
+Auto:CreateDropdown({ Name = "Counter Move", Options = { "Auto", "Block", "Spike" }, CurrentOption = "Auto", Flag = "autocountermove",
+    Callback = function(v) AutoCounter.move = v end })
+Auto:CreateSlider({ Name = "Counter Net Range", Range = { 3, 20 }, Increment = 1, CurrentValue = 9, Flag = "autocounternetrange",
+    Callback = function(v) AutoCounter.netRange = v end })
+Auto:CreateSlider({ Name = "Counter Width", Range = { 4, 30 }, Increment = 1, CurrentValue = 14, Flag = "autocounterlateral",
+    Callback = function(v) AutoCounter.lateral = v end })
+Auto:CreateSlider({ Name = "Counter Delay", Range = { 0, 0.5 }, Increment = 0.05, CurrentValue = 0.05, Flag = "autocounterdelay",
+    Callback = function(v) AutoCounter.delay = v end })
+Auto:CreateToggle({ Name = "Counter Auto Jump", CurrentValue = true, Flag = "autocounterjump",
+    Callback = function(v) AutoCounter.autoJump = v end })
+
+Auto:CreateSection("Auto Corner")
+Auto:CreateToggle({ Name = "Auto Corner", Desc = "Aims to corner of enemy goal", CurrentValue = false, Flag = "autocorner",
+    Callback = function(v)
+        AutoCorner.enabled = v
+        if v then AutoCorner.installAim() end
+    end })
+Auto:CreateDropdown({ Name = "Corner Side", Options = { "Auto", "Left", "Right" }, CurrentOption = "Auto", Flag = "autocornerside",
+    Callback = function(v) AutoCorner.side = v end })
+Auto:CreateDropdown({ Name = "Corner Depth", Options = { "All", "Back", "Nearest" }, CurrentOption = "All", Flag = "autocornerreach",
+    Callback = function(v) AutoCorner.reach = v end })
+
+Auto:CreateSection("Slingshot")
+Auto:CreateToggle({ Name = "Jinko Curve Spike", Desc = "Curve spike with slingshot indicator", CurrentValue = false, Flag = "jinkocurve",
+    Callback = function(v) JinkoCurve.enabled = v if v then JinkoCurve.start() else JinkoCurve.stop() end end })
+
+Auto:CreateSection("Auto Kisuki Aim")
+Auto:CreateToggle({ Name = "Auto Kisuki Aim", Desc = "Hold dive: character locks onto the ball", CurrentValue = false, Flag = "kisukiaim",
+    Callback = function(v) DiveAim.enabled = v if v then DiveAim.start() else DiveAim.stop() end end })
+Auto:CreateSlider({ Name = "Kisuki Aim Hold", Range = { 0.1, 1 }, Increment = 0.05, CurrentValue = 0.35, Flag = "kisukiaimhold",
+    Callback = function(v) DiveAim.holdTime = v end })
+Auto:CreateSlider({ Name = "Kisuki Aim Lead", Range = { 0, 0.5 }, Increment = 0.05, CurrentValue = 0.1, Flag = "kisukiaimlead",
+    Callback = function(v) DiveAim.lead = v end })
+Auto:CreateToggle({ Name = "Show New Anim IDs", Desc = "Notify unknown animation IDs (for other characters)", CurrentValue = false, Flag = "kisukiaimdebug",
+    Callback = function(v) DiveAim.showNew = v end })
+
+Auto:CreateSection("Auto Style Spin")
+Auto:CreateToggle({ Name = "Auto Style Spin", CurrentValue = false, Flag = "autostyle",
+    Callback = function(v)
+        autoSpin = v
+        if v then startAutoSpin() end
+    end })
+Auto:CreateDropdown({ Name = "Spin Type", Options = { "Normal", "Lucky" }, CurrentOption = "Normal", Flag = "spintype",
+    Callback = function(v) spinType = v end })
+Auto:CreateDropdown({ Name = "Target Style",
+    Options = {
+        "Ronin", "Hidari", "Jinko", "Timeskip Hinto", "Timeskip Kyamo",
+        "Akuto", "Taichou", "Sanju", "Mikage", "Kazana", "Timeskip Okazu",
+        "Kisuki", "Bakuri", "Kyamo", "Okazu", "Hirakumi",
+    },
+    CurrentOption = "Ronin", Flag = "targetstyle",
+    Callback = function(v) desiredStyles = { v } end })
+
+Auto:CreateSection("Auto Ability Spin")
+Auto:CreateToggle({ Name = "Auto Ability Spin", CurrentValue = false, Flag = "autoabilityspin",
+    Callback = function(v)
+        autoAbilitySpin = v
+        if v then startAutoAbilitySpin() end
+    end })
+Auto:CreateDropdown({ Name = "Ability Spin Type", Options = { "Normal", "Lucky" }, CurrentOption = "Normal", Flag = "abilityspintype",
+    Callback = function(v) abilitySpinType = v end })
+Auto:CreateDropdown({ Name = "Target Ability",
+    Options = {
+        "Shield Breaker", "Magnetic Pull", "Lead Feet", "Extra Touch", "Godly",
+        "Redirection Jump", "Curve Spike", "Divine Strength", "Legendary",
+        "Steel Block", "Zero Gravity Set", "Rare", "Boom Jump", "Moonball",
+    },
+    CurrentOption = "Shield Breaker", Flag = "targetability",
+    Callback = function(v) desiredAbilities = { v } end })
+
+Auto:CreateSection("Auto Apply")
+Auto:CreateToggle({ Name = "Auto Shift Lock", CurrentValue = false, Flag = "autoshiftlock",
+    Callback = function(v)
+        autoShiftLockEnabled = v
+        if not v then
+            local c = LocalPlayer.Character
+            if c then local h = c:FindFirstChild("Humanoid") if h then h.AutoRotate = false end end
+        end
+    end })
+Auto:CreateToggle({ Name = "Auto Apply Ball", CurrentValue = false, Flag = "autoapplyball",
+    Callback = function(v) autoApplyBallSkin = v sweep() end })
+Auto:CreateToggle({ Name = "Auto Apply Jersey", CurrentValue = false, Flag = "autoapplyjersey",
+    Callback = function(v) autoApplyJersey = v applyJersey(selectedJersey) end })
+
+GameJoin:CreateSection("Game Modes")
+for _, mode in ipairs({
+    { "Chaos Mode", "ChaosMode" }, { "1v1 Mini Map", "OnesMini" },
+    { "2v2 Ranked", "Twos" }, { "3v3 Ranked", "Threes" },
+    { "4v4 Ranked", "Fours" }, { "6v6 Ranked", "Sixes" },
+    { "Training", "Training" },
+}) do
+    GameJoin:CreateButton({
+        Name = mode[1],
+        Callback = function()
+            local RF = ReplicatedStorage.Packages._Index["sleitnick_knit@1.7.0"].knit.Services.PartyService.RF
+            if RF then
+                local RT = RF:FindFirstChild("RequestTeleport")
+                if RT then RT:InvokeServer(mode[2]) end
+            end
+        end,
+    })
+end
+
+Settings:CreateKeybind({ Name = "Toggle UI", CurrentKeybind = "RightControl",
+    OnChanged = function(Key) Window:SetKeybind(Key) end })
+Settings:CreateConfigManager({ Name = "Configs" })
+Settings:CreateButton({ Name = "Unload", Icon = "power",
+    Callback = function()
+        Parasite:Confirm({
+            Title = "Unload?", ConfirmText = "Unload",
+            Callback = function()
+                toggleProtection(false)
+                if BallESP.connection then BallESP.connection:Disconnect() end
+                if AutoReceive.connection then AutoReceive.connection:Disconnect() end
+                if AutoSet.connection then AutoSet.connection:Disconnect() end
+                if AimSet.connection then AimSet.connection:Disconnect() end
+                if JinkoCurve.connection then JinkoCurve.connection:Disconnect() end
+                if cardConnection then cardConnection:Disconnect() end
+                if desyncConnection then desyncConnection:Disconnect() end
+                if hitConnection then hitConnection:Disconnect() end
+                if hitConnection2 then hitConnection2:Disconnect() end
+                if hitRemovedConnection then hitRemovedConnection:Disconnect() end
+                AutoFarm:stop()
+                DiveAim.stop()
+                Hitbox.disable()
+                disableAntiLag()
+                Window:Destroy()
+            end,
+        })
+    end })
+
+Window:LoadConfig()
